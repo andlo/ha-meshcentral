@@ -20,15 +20,26 @@ from .const import (
 
 _LOGGER = logging.getLogger(__name__)
 
+# Schema when using login token (2FA accounts)
+STEP_TOKEN_SCHEMA = vol.Schema(
+    {
+        vol.Required(CONF_HOST): str,
+        vol.Required(CONF_PORT, default=DEFAULT_PORT): int,
+        vol.Required(CONF_LOGIN_TOKEN): str,
+        vol.Optional(CONF_USE_SSL, default=False): bool,
+        vol.Optional(CONF_VERIFY_SSL, default=False): bool,
+    }
+)
+
+# Schema when using username + password (no 2FA)
 STEP_USER_SCHEMA = vol.Schema(
     {
         vol.Required(CONF_HOST): str,
         vol.Required(CONF_PORT, default=DEFAULT_PORT): int,
         vol.Required(CONF_USERNAME): str,
         vol.Required(CONF_PASSWORD): str,
-        vol.Optional(CONF_LOGIN_TOKEN, default=""): str,
-        vol.Optional(CONF_USE_SSL, default=True): bool,
-        vol.Optional(CONF_VERIFY_SSL, default=True): bool,
+        vol.Optional(CONF_USE_SSL, default=False): bool,
+        vol.Optional(CONF_VERIFY_SSL, default=False): bool,
     }
 )
 
@@ -41,32 +52,92 @@ class MeshCentralConfigFlow(ConfigFlow, domain=DOMAIN):
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
+        """First step: choose auth method."""
+        return self.async_show_menu(
+            step_id="user",
+            menu_options=["token", "password"],
+        )
+
+    async def async_step_token(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Login with a MeshCentral login token (works with 2FA)."""
         errors: dict[str, str] = {}
 
         if user_input is not None:
-            login_token = user_input.get(CONF_LOGIN_TOKEN, "").strip() or None
+            token = user_input[CONF_LOGIN_TOKEN].strip()
+            # Token format from MeshCentral is "username@@password"
+            if "@@" in token:
+                token_user, token_pass = token.split("@@", 1)
+            else:
+                token_user = user_input.get(CONF_USERNAME, "")
+                token_pass = token
+
             client = MeshCentralClient(
                 host=user_input[CONF_HOST],
                 port=user_input[CONF_PORT],
-                username=user_input[CONF_USERNAME],
-                password=user_input[CONF_PASSWORD],
-                use_ssl=user_input.get(CONF_USE_SSL, True),
-                verify_ssl=user_input.get(CONF_VERIFY_SSL, True),
-                login_token=login_token,
+                username=token_user,
+                password=token_pass,
+                use_ssl=user_input.get(CONF_USE_SSL, False),
+                verify_ssl=user_input.get(CONF_VERIFY_SSL, False),
+                login_token=token,
             )
             try:
                 ok = await client.login()
                 if not ok:
                     errors["base"] = "invalid_auth"
             except Exception:
-                _LOGGER.exception("Unexpected error during login")
+                _LOGGER.exception("Unexpected error during token login")
                 errors["base"] = "cannot_connect"
             finally:
                 await client.close()
 
             if not errors:
-                # Store empty string as None
-                user_input[CONF_LOGIN_TOKEN] = login_token
+                await self.async_set_unique_id(
+                    f"{user_input[CONF_HOST]}:{user_input[CONF_PORT]}"
+                )
+                self._abort_if_unique_id_configured()
+                data = dict(user_input)
+                data[CONF_USERNAME] = token_user
+                data[CONF_PASSWORD] = token_pass
+                data[CONF_LOGIN_TOKEN] = token
+                return self.async_create_entry(
+                    title=f"MeshCentral ({user_input[CONF_HOST]})",
+                    data=data,
+                )
+
+        return self.async_show_form(
+            step_id="token",
+            data_schema=STEP_TOKEN_SCHEMA,
+            errors=errors,
+        )
+
+    async def async_step_password(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Login with username + password (no 2FA)."""
+        errors: dict[str, str] = {}
+
+        if user_input is not None:
+            client = MeshCentralClient(
+                host=user_input[CONF_HOST],
+                port=user_input[CONF_PORT],
+                username=user_input[CONF_USERNAME],
+                password=user_input[CONF_PASSWORD],
+                use_ssl=user_input.get(CONF_USE_SSL, False),
+                verify_ssl=user_input.get(CONF_VERIFY_SSL, False),
+            )
+            try:
+                ok = await client.login()
+                if not ok:
+                    errors["base"] = "invalid_auth"
+            except Exception:
+                _LOGGER.exception("Unexpected error during password login")
+                errors["base"] = "cannot_connect"
+            finally:
+                await client.close()
+
+            if not errors:
                 await self.async_set_unique_id(
                     f"{user_input[CONF_HOST]}:{user_input[CONF_PORT]}"
                 )
@@ -77,10 +148,7 @@ class MeshCentralConfigFlow(ConfigFlow, domain=DOMAIN):
                 )
 
         return self.async_show_form(
-            step_id="user",
+            step_id="password",
             data_schema=STEP_USER_SCHEMA,
             errors=errors,
-            description_placeholders={
-                "token_help": "Leave blank if no 2FA. Create token in MeshCentral → My Account → Login Tokens."
-            },
         )

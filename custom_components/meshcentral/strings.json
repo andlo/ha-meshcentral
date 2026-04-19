@@ -2,22 +2,38 @@
   "config": {
     "step": {
       "user": {
-        "title": "Connect to MeshCentral",
-        "description": "Enter the connection details for your MeshCentral server.",
+        "title": "MeshCentral — Choose login method",
+        "menu_options": {
+          "token": "Login Token (use if 2FA is enabled)",
+          "password": "Username & Password (no 2FA)"
+        }
+      },
+      "token": {
+        "title": "MeshCentral — Login Token",
+        "description": "Paste the full login token from MeshCentral → My Account → Login Tokens. The token contains both username and password.",
+        "data": {
+          "host": "Host or IP address",
+          "port": "Port",
+          "login_token": "Login Token",
+          "use_ssl": "Use SSL (disable if behind reverse proxy/tlsOffload)",
+          "verify_ssl": "Verify SSL certificate"
+        }
+      },
+      "password": {
+        "title": "MeshCentral — Username & Password",
         "data": {
           "host": "Host or IP address",
           "port": "Port",
           "username": "Username",
           "password": "Password",
-          "login_token": "Login Token (required if 2FA is enabled)",
-          "use_ssl": "Use SSL (HTTPS/WSS)",
+          "use_ssl": "Use SSL (disable if behind reverse proxy/tlsOffload)",
           "verify_ssl": "Verify SSL certificate"
         }
       }
     },
     "error": {
       "cannot_connect": "Cannot connect to MeshCentral server",
-      "invalid_auth": "Invalid username or password"
+      "invalid_auth": "Authentication failed — check token or credentials"
     },
     "abort": {
       "already_configured": "This MeshCentral server is already configured"
