@@ -52,6 +52,7 @@ class MeshCentralClient:
 
     @property
     def ws_url(self) -> str:
+        # ws:// is correct even on port 443 when tlsOffload=true
         scheme = "wss" if self._use_ssl else "ws"
         return f"{scheme}://{self._host}:{self._port}{WS_CONTROL_PATH}"
 
