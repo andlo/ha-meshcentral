@@ -1,0 +1,25 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Connect to MeshCentral",
+        "description": "Enter the connection details for your MeshCentral server.",
+        "data": {
+          "host": "Host or IP address",
+          "port": "Port",
+          "username": "Username",
+          "password": "Password",
+          "use_ssl": "Use SSL (HTTPS/WSS)",
+          "verify_ssl": "Verify SSL certificate"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Cannot connect to MeshCentral server",
+      "invalid_auth": "Invalid username or password"
+    },
+    "abort": {
+      "already_configured": "This MeshCentral server is already configured"
+    }
+  }
+}
