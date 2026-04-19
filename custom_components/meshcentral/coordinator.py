@@ -12,7 +12,6 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, Upda
 
 from .client import MeshCentralClient
 from .const import (
-    CONF_LOGIN_TOKEN,
     CONF_USE_SSL,
     CONF_VERIFY_SSL,
     DEFAULT_SCAN_INTERVAL,
@@ -38,9 +37,8 @@ class MeshCentralCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             port=entry.data[CONF_PORT],
             username=entry.data[CONF_USERNAME],
             password=entry.data[CONF_PASSWORD],
-            use_ssl=entry.data.get(CONF_USE_SSL, True),
-            verify_ssl=entry.data.get(CONF_VERIFY_SSL, True),
-            login_token=entry.data.get(CONF_LOGIN_TOKEN),
+            use_ssl=entry.data.get(CONF_USE_SSL, False),
+            verify_ssl=entry.data.get(CONF_VERIFY_SSL, False),
         )
         self._logged_in = False
 
