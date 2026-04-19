@@ -8,6 +8,7 @@ CONF_USERNAME = "username"
 CONF_PASSWORD = "password"
 CONF_USE_SSL = "use_ssl"
 CONF_VERIFY_SSL = "verify_ssl"
+CONF_LOGIN_TOKEN = "login_token"
 
 DEFAULT_PORT = 443
 DEFAULT_USE_SSL = True

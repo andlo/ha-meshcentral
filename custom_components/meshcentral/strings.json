@@ -9,6 +9,7 @@
           "port": "Port",
           "username": "Username",
           "password": "Password",
+          "login_token": "Login Token (required if 2FA is enabled)",
           "use_ssl": "Use SSL (HTTPS/WSS)",
           "verify_ssl": "Verify SSL certificate"
         }

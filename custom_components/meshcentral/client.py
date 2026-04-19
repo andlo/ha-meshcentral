@@ -17,7 +17,13 @@ WS_TIMEOUT = 15
 
 
 class MeshCentralClient:
-    """Async WebSocket client for MeshCentral."""
+    """Async WebSocket client for MeshCentral.
+
+    Supports two auth methods:
+      1. Login token (preferred — works with 2FA accounts)
+         Set login_token to the hex token from My Account → Login Tokens.
+      2. Username + password (only works without 2FA)
+    """
 
     def __init__(
         self,
@@ -27,6 +33,7 @@ class MeshCentralClient:
         password: str,
         use_ssl: bool = True,
         verify_ssl: bool = True,
+        login_token: str | None = None,
     ) -> None:
         self._host = host
         self._port = port
@@ -34,8 +41,8 @@ class MeshCentralClient:
         self._password = password
         self._use_ssl = use_ssl
         self._verify_ssl = verify_ssl
+        self._login_token = login_token
         self._session: aiohttp.ClientSession | None = None
-        self._ws: aiohttp.ClientWebSocketResponse | None = None
         self._cookie: str | None = None
 
     @property
@@ -64,7 +71,44 @@ class MeshCentralClient:
         return self._session
 
     async def login(self) -> bool:
-        """Login via HTTP and grab session cookie."""
+        """Authenticate — via login token or username+password."""
+        if self._login_token:
+            return await self._login_with_token()
+        return await self._login_with_password()
+
+    async def _login_with_token(self) -> bool:
+        """Use a pre-created login token (bypasses 2FA)."""
+        session = await self._get_session()
+        ssl_ctx = self._ssl_context()
+        login_url = f"{self.base_url}/login"
+        payload = {
+            "username": self._username,
+            "token": self._login_token,
+        }
+        try:
+            async with session.post(
+                login_url,
+                data=payload,
+                ssl=ssl_ctx,
+                allow_redirects=True,
+                timeout=aiohttp.ClientTimeout(total=WS_TIMEOUT),
+            ) as resp:
+                _LOGGER.debug("Token login response: HTTP %s", resp.status)
+                cookies = session.cookie_jar.filter_cookies(login_url)
+                if cookies:
+                    self._cookie = "; ".join(
+                        f"{k}={v.value}" for k, v in cookies.items()
+                    )
+                    _LOGGER.debug("Token login OK, got session cookie")
+                    return True
+                _LOGGER.error("Token login: no cookie returned (status %s)", resp.status)
+                return False
+        except Exception as err:
+            _LOGGER.error("Token login error: %s", err)
+            return False
+
+    async def _login_with_password(self) -> bool:
+        """Username + password login (does not work if 2FA is enabled)."""
         session = await self._get_session()
         ssl_ctx = self._ssl_context()
         login_url = f"{self.base_url}/login"
@@ -77,19 +121,16 @@ class MeshCentralClient:
                 allow_redirects=True,
                 timeout=aiohttp.ClientTimeout(total=WS_TIMEOUT),
             ) as resp:
-                if resp.status in (200, 302):
-                    # Extract session cookie
-                    cookies = session.cookie_jar.filter_cookies(login_url)
-                    if cookies:
-                        self._cookie = "; ".join(
-                            f"{k}={v.value}" for k, v in cookies.items()
-                        )
-                        _LOGGER.debug("Login successful, got cookie")
-                        return True
-                _LOGGER.error("Login failed: HTTP %s", resp.status)
+                cookies = session.cookie_jar.filter_cookies(login_url)
+                if cookies:
+                    self._cookie = "; ".join(
+                        f"{k}={v.value}" for k, v in cookies.items()
+                    )
+                    return True
+                _LOGGER.error("Password login failed: HTTP %s", resp.status)
                 return False
         except Exception as err:
-            _LOGGER.error("Login error: %s", err)
+            _LOGGER.error("Password login error: %s", err)
             return False
 
     async def _send_recv(self, payload: dict, response_action: str) -> Any:
@@ -135,10 +176,8 @@ class MeshCentralClient:
         )
         if result is None:
             return []
-        # 'nodes' response is a dict of meshId -> list of nodes
         devices = []
-        nodes_by_mesh = result.get("nodes", {})
-        for mesh_id, node_list in nodes_by_mesh.items():
+        for mesh_id, node_list in result.get("nodes", {}).items():
             for node in node_list:
                 node["_meshid"] = mesh_id
                 devices.append(node)

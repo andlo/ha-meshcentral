@@ -10,7 +10,13 @@ from homeassistant.config_entries import ConfigFlow, ConfigFlowResult
 from homeassistant.const import CONF_HOST, CONF_PASSWORD, CONF_PORT, CONF_USERNAME
 
 from .client import MeshCentralClient
-from .const import CONF_USE_SSL, CONF_VERIFY_SSL, DEFAULT_PORT, DOMAIN
+from .const import (
+    CONF_LOGIN_TOKEN,
+    CONF_USE_SSL,
+    CONF_VERIFY_SSL,
+    DEFAULT_PORT,
+    DOMAIN,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -20,6 +26,7 @@ STEP_USER_SCHEMA = vol.Schema(
         vol.Required(CONF_PORT, default=DEFAULT_PORT): int,
         vol.Required(CONF_USERNAME): str,
         vol.Required(CONF_PASSWORD): str,
+        vol.Optional(CONF_LOGIN_TOKEN, default=""): str,
         vol.Optional(CONF_USE_SSL, default=True): bool,
         vol.Optional(CONF_VERIFY_SSL, default=True): bool,
     }
@@ -37,6 +44,7 @@ class MeshCentralConfigFlow(ConfigFlow, domain=DOMAIN):
         errors: dict[str, str] = {}
 
         if user_input is not None:
+            login_token = user_input.get(CONF_LOGIN_TOKEN, "").strip() or None
             client = MeshCentralClient(
                 host=user_input[CONF_HOST],
                 port=user_input[CONF_PORT],
@@ -44,17 +52,21 @@ class MeshCentralConfigFlow(ConfigFlow, domain=DOMAIN):
                 password=user_input[CONF_PASSWORD],
                 use_ssl=user_input.get(CONF_USE_SSL, True),
                 verify_ssl=user_input.get(CONF_VERIFY_SSL, True),
+                login_token=login_token,
             )
             try:
                 ok = await client.login()
                 if not ok:
                     errors["base"] = "invalid_auth"
             except Exception:
+                _LOGGER.exception("Unexpected error during login")
                 errors["base"] = "cannot_connect"
             finally:
                 await client.close()
 
             if not errors:
+                # Store empty string as None
+                user_input[CONF_LOGIN_TOKEN] = login_token
                 await self.async_set_unique_id(
                     f"{user_input[CONF_HOST]}:{user_input[CONF_PORT]}"
                 )
@@ -68,4 +80,7 @@ class MeshCentralConfigFlow(ConfigFlow, domain=DOMAIN):
             step_id="user",
             data_schema=STEP_USER_SCHEMA,
             errors=errors,
+            description_placeholders={
+                "token_help": "Leave blank if no 2FA. Create token in MeshCentral → My Account → Login Tokens."
+            },
         )
