@@ -1,0 +1,27 @@
+run_command:
+  name: Run Command
+  description: >
+    Run a shell command on a MeshCentral-managed device.
+    The device must be online and have an active agent.
+  fields:
+    device_id:
+      name: Device ID or Name
+      description: The MeshCentral node ID or device name (e.g. "fedora" or "ASUS-GamerPC")
+      required: true
+      example: "fedora"
+      selector:
+        text:
+    command:
+      name: Command
+      description: Shell command to execute on the remote device
+      required: true
+      example: "shutdown /s /t 60"
+      selector:
+        text:
+    run_as_user:
+      name: Run as user
+      description: Run command in user context instead of system/root context
+      required: false
+      default: false
+      selector:
+        boolean:

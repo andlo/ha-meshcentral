@@ -88,8 +88,6 @@ class MeshCentralClient:
                 timeout=aiohttp.ClientTimeout(total=WS_TIMEOUT),
             ) as resp:
                 _LOGGER.debug("Login response: HTTP %s", resp.status)
-                # Read Set-Cookie directly from raw headers — aiohttp's cookie
-                # jar silently drops cookies on non-standard port combinations
                 cookies = []
                 for name, val in resp.raw_headers:
                     if name.lower() == b"set-cookie":
@@ -217,6 +215,30 @@ class MeshCentralClient:
         )
         if result:
             return result.get("result", "ok")
+        return None
+
+    async def run_command(
+        self, node_id: str, command: str, run_as_user: bool = False
+    ) -> str | None:
+        """Run a shell command on a device via MeshCentral agent.
+
+        Returns command output as string, or None on timeout/failure.
+        Note: MeshCentral runs the command asynchronously — the response
+        contains a runid which can be used to track the result. We wait
+        up to WS_TIMEOUT seconds for the result to come back.
+        """
+        result = await self._send_recv(
+            {
+                "action": "runcommands",
+                "nodeid": node_id,
+                "type": 1 if run_as_user else 0,
+                "cmds": command,
+                "responseid": f"ha-cmd-{node_id[:8]}",
+            },
+            "runcommands",
+        )
+        if result:
+            return result.get("result", result.get("output", ""))
         return None
 
     async def close(self) -> None:
