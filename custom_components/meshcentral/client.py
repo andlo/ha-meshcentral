@@ -169,7 +169,7 @@ class MeshCentralClient:
             {
                 "action": "getsysinfo",
                 "nodeid": node_id,
-                "responseid": f"ha-sysinfo-{node_id[:8]}",
+                "responseid": "ha-sysinfo",
             },
             "getsysinfo",
         )
@@ -191,7 +191,7 @@ class MeshCentralClient:
                 "action": "poweraction",
                 "nodeid": node_id,
                 "actiontype": action_type,
-                "responseid": f"ha-pwr-{node_id}",
+                "responseid": "ha-pwr",
             },
             "poweraction",
         )
@@ -209,7 +209,7 @@ class MeshCentralClient:
             {
                 "action": "wakedevices",
                 "nodeids": [node_id],
-                "responseid": f"ha-wol-{node_id}",
+                "responseid": "ha-wol",
             },
             "wakedevices",
         )
