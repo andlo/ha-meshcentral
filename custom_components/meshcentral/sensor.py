@@ -11,6 +11,7 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import DOMAIN
 from .coordinator import MeshCentralCoordinator
+from .sensor_hardware import HardwareDataCoordinator, async_setup_hardware_entities
 
 
 async def async_setup_entry(
@@ -19,6 +20,8 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     coordinator: MeshCentralCoordinator = hass.data[DOMAIN][entry.entry_id]
+
+    # Basic sensors
     entities = []
     for node_id in coordinator.data:
         entities += [
@@ -31,6 +34,12 @@ async def async_setup_entry(
             MeshCentralAgentLastSeenSensor(coordinator, node_id),
         ]
     async_add_entities(entities)
+
+    # Hardware detail sensors (disabled by default, fetched separately)
+    hw_coordinator = HardwareDataCoordinator(hass, coordinator)
+    await hw_coordinator.async_config_entry_first_refresh()
+    hass.data[DOMAIN][f"{entry.entry_id}_hw"] = hw_coordinator
+    await async_setup_hardware_entities(hass, entry, coordinator, hw_coordinator, async_add_entities)
 
 
 class _Base(CoordinatorEntity[MeshCentralCoordinator], SensorEntity):

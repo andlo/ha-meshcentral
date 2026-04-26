@@ -165,6 +165,20 @@ class MeshCentralClient:
             return []
         return result.get("meshes", [])
 
+    async def get_sysinfo(self, node_id: str) -> dict | None:
+        """Return full hardware/sysinfo for a single device."""
+        result = await self._send_recv(
+            {
+                "action": "getsysinfo",
+                "nodeid": node_id,
+                "responseid": f"ha-sysinfo-{node_id[:8]}",
+            },
+            "getsysinfo",
+        )
+        if result:
+            return result.get("hardware")
+        return None
+
     async def send_power_action(self, node_id: str, action_type: int) -> bool:
         """Send a power command to a device.
 

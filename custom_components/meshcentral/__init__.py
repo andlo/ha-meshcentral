@@ -37,4 +37,6 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     if unload_ok:
         coordinator: MeshCentralCoordinator = hass.data[DOMAIN].pop(entry.entry_id)
         await coordinator.async_shutdown()
+        # Clean up hardware coordinator if present
+        hass.data[DOMAIN].pop(f"{entry.entry_id}_hw", None)
     return unload_ok
