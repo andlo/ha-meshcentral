@@ -77,7 +77,6 @@ class MeshCentralOnlineSensor(_Base):
 
 class MeshCentralAntivirusSensor(_Base):
     _attr_name = "Antivirus OK"
-    _attr_device_class = BinarySensorDeviceClass.SAFETY
     _attr_icon = "mdi:shield-check"
 
     def __init__(self, coordinator, node_id):
@@ -95,7 +94,6 @@ class MeshCentralAntivirusSensor(_Base):
 
 class MeshCentralFirewallSensor(_Base):
     _attr_name = "Firewall OK"
-    _attr_device_class = BinarySensorDeviceClass.SAFETY
     _attr_icon = "mdi:wall-fire"
 
     def __init__(self, coordinator, node_id):
@@ -113,7 +111,6 @@ class MeshCentralFirewallSensor(_Base):
 
 class MeshCentralDefenderSensor(_Base):
     _attr_name = "Defender Real-Time Protection"
-    _attr_device_class = BinarySensorDeviceClass.SAFETY
     _attr_icon = "mdi:shield-lock"
 
     def __init__(self, coordinator, node_id):
