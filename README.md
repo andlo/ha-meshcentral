@@ -1,6 +1,7 @@
 # ha-meshcentral
 
 [![hacs_badge](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://github.com/hacs/integration)
+[![GitHub release](https://img.shields.io/github/release/andlo/ha-meshcentral.svg)](https://github.com/andlo/ha-meshcentral/releases)
 
 Home Assistant custom integration for [MeshCentral](https://meshcentral.com) — the open-source remote management platform.
 
@@ -32,6 +33,7 @@ Running MeshCentral alongside Home Assistant is a powerful combination for anyon
 | `sensor.<n>_active_users` | Currently logged-in users |
 | `sensor.<n>_description` | Device description from MeshCentral |
 | `sensor.<n>_agent_last_seen` | When agent last contacted server |
+| `device_tracker.<n>_tracker` | Home/not_home based on agent connectivity |
 
 ### Per device — Security (Windows only)
 | Entity | Description |
@@ -68,7 +70,7 @@ These sensors are fetched every 5 minutes via a separate `getsysinfo` call. They
 | `sensor.<n>_ram_total` | Total RAM in GB |
 | `sensor.<n>_disk_c_total` | C: drive total size in GB |
 | `sensor.<n>_disk_c_free` | C: drive free space in GB |
-| `sensor.<n>_disk_c_free` | C: drive free space in % |
+| `sensor.<n>_disk_c_free_percent` | C: drive free space in % |
 | `sensor.<n>_running_processes` | Number of running processes |
 | `sensor.<n>_screen_resolution` | Current screen resolution (e.g. 1920x1080) |
 
@@ -77,6 +79,11 @@ These sensors are fetched every 5 minutes via a separate `getsysinfo` call. They
 |---|---|
 | `sensor.<n>_disk_used` | Root filesystem used in MB |
 | `sensor.<n>_disk_free` | Root filesystem free in MB |
+
+### Service
+| Service | Description |
+|---|---|
+| `meshcentral.run_command` | Run a shell command on any online device |
 
 ## Installation
 
@@ -89,6 +96,31 @@ These sensors are fetched every 5 minutes via a separate `getsysinfo` call. They
 ### Manual
 
 Copy `custom_components/meshcentral/` into your HA `custom_components/` directory and restart.
+
+## Lovelace card
+
+A custom card is included in the `www/` folder. Add it as a resource and use it in your dashboards.
+
+**Add as resource** — Settings → Dashboards → Resources → Add resource:
+- URL: `/local/meshcentral-card.js`
+- Type: JavaScript module
+
+**Copy the card file to HA:**
+```bash
+cp www/meshcentral-card.js /config/www/
+```
+
+**Card configuration:**
+```yaml
+type: custom:meshcentral-card
+title: My Computers
+devices:
+  - fedora
+  - ASUS-GamerPC
+  - ASRock
+```
+
+The card shows online/offline status, OS, IP, logged-in users, last boot, security badges, and hardware info (CPU, RAM, disk) for each device — if the hardware sensors are enabled.
 
 ## Configuration
 
@@ -115,14 +147,14 @@ If MeshCentral runs behind a reverse proxy (Nginx, Cloudflare Tunnel) with `tlsO
 
 The integration uses two mechanisms in parallel:
 
-- **Real-time WebSocket push** — a persistent connection to MeshCentral's `/control.ashx` endpoint receives `nodeconnect` events the moment a device goes online or offline. This means online/offline status updates are instant.
-- **Polling fallback** — a full device list refresh runs every 5 minutes to ensure nothing is missed.
-- **Hardware data** — a separate `getsysinfo` call runs every 5 minutes for each online device to update hardware detail sensors.
+- **Real-time WebSocket push** — a persistent connection to MeshCentral's `/control.ashx` endpoint receives `nodeconnect` events the moment a device goes online or offline. Online/offline status updates are instant.
+- **Polling fallback** — a full device list refresh runs every 5 minutes to ensure nothing is missed if the WebSocket drops an event.
+- **Hardware data** — a separate `getsysinfo` call runs every 5 minutes for each online device to update the hardware detail sensors.
 
 ## Automation examples
 
 ```yaml
-# Turn on desk lamp when your PC comes online
+# Turn on desk lamp when PC comes online
 automation:
   trigger:
     platform: state
@@ -143,14 +175,13 @@ automation:
     service: notify.mobile_app
     data:
       message: "⚠️ Windows Defender disabled on ASUS-GamerPC!"
+
+# Run a command on a device
+service: meshcentral.run_command
+data:
+  device_id: fedora
+  command: "systemctl restart nginx"
 ```
-
-## Roadmap
-
-- [ ] Run custom shell command service
-- [ ] Device tracker entity
-- [ ] Power state sensor (on/off/sleep)
-- [ ] Multiple disk volumes support
 
 ## License
 
