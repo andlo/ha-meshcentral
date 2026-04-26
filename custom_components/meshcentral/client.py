@@ -165,6 +165,27 @@ class MeshCentralClient:
             return []
         return result.get("meshes", [])
 
+    async def send_power_action(self, node_id: str, action_type: int) -> bool:
+        """Send a power command to a device.
+
+        action_type:
+            1 = Sleep
+            2 = Reboot
+            3 = Shutdown / Power off
+            4 = Wake-on-LAN
+            5 = Hibernate (Windows only)
+        """
+        result = await self._send_recv(
+            {
+                "action": "poweraction",
+                "nodeid": node_id,
+                "actiontype": action_type,
+                "responseid": f"ha-pwr-{node_id}",
+            },
+            "poweraction",
+        )
+        return result is not None
+
     async def close(self) -> None:
         """Close the underlying HTTP session."""
         if self._session and not self._session.closed:
