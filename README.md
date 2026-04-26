@@ -183,6 +183,12 @@ data:
   command: "systemctl restart nginx"
 ```
 
+## Related
+
+- [MeshCentral Add-on](https://github.com/andlo/ha-meshcentral-addon) — Run MeshCentral as a Home Assistant add-on (no separate server needed)
+- [MeshCentral](https://meshcentral.com) — Official MeshCentral website
+- [MeshCentral GitHub](https://github.com/Ylianst/MeshCentral) — MeshCentral source code
+
 ## License
 
 MIT
