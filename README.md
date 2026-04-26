@@ -4,6 +4,20 @@
 
 Home Assistant custom integration for [MeshCentral](https://meshcentral.com) — the open-source remote management platform.
 
+## What is MeshCentral?
+
+MeshCentral is a free, open-source remote device management platform you can self-host on your own server. It lets you remotely monitor, manage and control computers and devices — Windows, Linux, and macOS — from a single web interface. Think of it as your own private TeamViewer or AnyDesk, without subscriptions or cloud dependency.
+
+### Why MeshCentral + Home Assistant?
+
+Running MeshCentral alongside Home Assistant is a powerful combination for anyone who wants full control over their home network:
+
+- **See all your devices in one place** — PC online/offline status, OS info, last boot time, and logged-in users appear as native HA entities alongside your lights, sensors, and other smart home devices.
+- **Automate around your computers** — trigger automations when a PC comes online (start casting music, turn on the desk lamp), or when it goes offline (cut power to peripherals via a smart plug).
+- **Power control from HA** — wake, reboot, sleep, hibernate or shut down any managed device via HA buttons or automations. Wake-on-LAN works even across subnets since MeshCentral relays the magic packet through its agents.
+- **Security monitoring** — Windows Defender, firewall and antivirus status exposed as binary sensors. Get notified if real-time protection goes offline.
+- **Real-time push** — the integration uses MeshCentral's WebSocket API for instant online/offline updates, not slow polling.
+
 ## Features
 
 ### Per device — Sensors
