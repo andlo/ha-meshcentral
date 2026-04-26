@@ -2,16 +2,12 @@
 
 DOMAIN = "meshcentral"
 
-CONF_HOST = "host"
-CONF_PORT = "port"
-CONF_USERNAME = "username"
-CONF_PASSWORD = "password"
 CONF_USE_SSL = "use_ssl"
 CONF_VERIFY_SSL = "verify_ssl"
 
 DEFAULT_PORT = 443
-DEFAULT_USE_SSL = True
-DEFAULT_VERIFY_SSL = True
+DEFAULT_USE_SSL = False
+DEFAULT_VERIFY_SSL = False
 DEFAULT_SCAN_INTERVAL = 30
 
 # Device attributes

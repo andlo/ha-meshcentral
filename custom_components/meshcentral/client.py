@@ -19,10 +19,13 @@ WS_TIMEOUT = 15
 class MeshCentralClient:
     """Async WebSocket client for MeshCentral.
 
-    Supports two auth methods:
-      1. Login token (preferred — works with 2FA accounts)
-         Set login_token to the hex token from My Account → Login Tokens.
-      2. Username + password (only works without 2FA)
+    Authenticates via username + password. If 2FA is enabled on the account,
+    create a Login Token in MeshCentral → My Account → Login Tokens and use
+    the generated username (~t:...) and password as credentials here.
+
+    Note on tlsOffload: if MeshCentral runs behind a reverse proxy with
+    tlsOffload=true, set use_ssl=False even if the port is 443. The server
+    accepts plain HTTP/WS on that port while the proxy handles TLS externally.
     """
 
     def __init__(
@@ -33,7 +36,6 @@ class MeshCentralClient:
         password: str,
         use_ssl: bool = True,
         verify_ssl: bool = True,
-        login_token: str | None = None,
     ) -> None:
         self._host = host
         self._port = port
@@ -41,7 +43,6 @@ class MeshCentralClient:
         self._password = password
         self._use_ssl = use_ssl
         self._verify_ssl = verify_ssl
-        self._login_token = login_token
         self._session: aiohttp.ClientSession | None = None
         self._cookie: str | None = None
 
@@ -52,7 +53,7 @@ class MeshCentralClient:
 
     @property
     def ws_url(self) -> str:
-        # ws:// is correct even on port 443 when tlsOffload=true
+        # Use ws:// even on port 443 when tlsOffload=true
         scheme = "wss" if self._use_ssl else "ws"
         return f"{scheme}://{self._host}:{self._port}{WS_CONTROL_PATH}"
 
@@ -72,49 +73,12 @@ class MeshCentralClient:
         return self._session
 
     async def login(self) -> bool:
-        """Authenticate — via login token or username+password."""
-        if self._login_token:
-            return await self._login_with_token()
-        return await self._login_with_password()
-
-    async def _login_with_token(self) -> bool:
-        """Use a pre-created login token (bypasses 2FA)."""
-        session = await self._get_session()
-        ssl_ctx = self._ssl_context()
-        login_url = f"{self.base_url}/login"
-        payload = {
-            "username": self._username,
-            "token": self._login_token,
-        }
-        try:
-            async with session.post(
-                login_url,
-                data=payload,
-                ssl=ssl_ctx,
-                allow_redirects=True,
-                timeout=aiohttp.ClientTimeout(total=WS_TIMEOUT),
-            ) as resp:
-                _LOGGER.debug("Token login response: HTTP %s", resp.status)
-                cookies = session.cookie_jar.filter_cookies(login_url)
-                if cookies:
-                    self._cookie = "; ".join(
-                        f"{k}={v.value}" for k, v in cookies.items()
-                    )
-                    _LOGGER.debug("Token login OK, got session cookie")
-                    return True
-                _LOGGER.error("Token login: no cookie returned (status %s)", resp.status)
-                return False
-        except Exception as err:
-            _LOGGER.error("Token login error: %s", err)
-            return False
-
-    async def _login_with_password(self) -> bool:
-        """Username + password login."""
+        """Authenticate with MeshCentral and store session cookie."""
         session = await self._get_session()
         ssl_ctx = self._ssl_context()
         login_url = f"{self.base_url}/login"
         payload = {"username": self._username, "password": self._password}
-        _LOGGER.warning("MeshCentral login attempt: POST %s", login_url)
+        _LOGGER.debug("Logging in to MeshCentral at %s", login_url)
         try:
             async with session.post(
                 login_url,
@@ -123,34 +87,31 @@ class MeshCentralClient:
                 allow_redirects=False,
                 timeout=aiohttp.ClientTimeout(total=WS_TIMEOUT),
             ) as resp:
-                _LOGGER.warning("MeshCentral login HTTP %s", resp.status)
-                # Read Set-Cookie headers directly from response
-                # (aiohttp cookie jar may miss cookies on non-standard ports)
+                _LOGGER.debug("Login response: HTTP %s", resp.status)
+                # Read Set-Cookie directly from raw headers — aiohttp's cookie
+                # jar silently drops cookies on non-standard port combinations
                 cookies = []
-                for header_name, header_val in resp.raw_headers:
-                    if header_name.lower() == b"set-cookie":
-                        # Extract just the name=value part before first ;
-                        cookie_pair = header_val.decode().split(";")[0].strip()
+                for name, val in resp.raw_headers:
+                    if name.lower() == b"set-cookie":
+                        cookie_pair = val.decode().split(";")[0].strip()
                         cookies.append(cookie_pair)
-                        _LOGGER.warning("MeshCentral got Set-Cookie: %s", cookie_pair)
                 if cookies:
                     self._cookie = "; ".join(cookies)
-                    _LOGGER.warning("MeshCentral login OK, cookie: %s", self._cookie[:60])
+                    _LOGGER.debug("Login successful")
                     return True
-                _LOGGER.error("MeshCentral login: HTTP %s but no Set-Cookie header", resp.status)
+                _LOGGER.error(
+                    "Login failed: HTTP %s returned no session cookie", resp.status
+                )
                 return False
         except Exception as err:
-            _LOGGER.error("MeshCentral login error: %s", err)
+            _LOGGER.error("Login error: %s", err)
             return False
 
     async def _send_recv(self, payload: dict, response_action: str) -> Any:
-        """Connect WS, send a command, collect matching response."""
+        """Open a WebSocket, send a command, and return the matching response."""
         session = await self._get_session()
         ssl_ctx = self._ssl_context()
-        headers = {}
-        if self._cookie:
-            headers["Cookie"] = self._cookie
-
+        headers = {"Cookie": self._cookie} if self._cookie else {}
         try:
             async with session.ws_connect(
                 self.ws_url,
@@ -179,7 +140,7 @@ class MeshCentralClient:
         return None
 
     async def get_devices(self) -> list[dict]:
-        """Return list of all devices the user can access."""
+        """Return all devices the authenticated user can access."""
         result = await self._send_recv(
             {"action": "nodes", "responseid": "ha-nodes"},
             "nodes",
@@ -191,10 +152,11 @@ class MeshCentralClient:
             for node in node_list:
                 node["_meshid"] = mesh_id
                 devices.append(node)
+        _LOGGER.debug("Fetched %d device(s) from MeshCentral", len(devices))
         return devices
 
     async def get_device_groups(self) -> list[dict]:
-        """Return list of device groups (meshes)."""
+        """Return all device groups (meshes)."""
         result = await self._send_recv(
             {"action": "meshes", "responseid": "ha-meshes"},
             "meshes",
@@ -204,7 +166,7 @@ class MeshCentralClient:
         return result.get("meshes", [])
 
     async def close(self) -> None:
-        """Close underlying HTTP session."""
+        """Close the underlying HTTP session."""
         if self._session and not self._session.closed:
             await self._session.close()
             self._session = None
