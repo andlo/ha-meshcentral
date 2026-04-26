@@ -128,14 +128,13 @@ class MeshCentralCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         """Process a single WebSocket message and update coordinator data."""
         action = data.get("action")
 
-        # Real-time connectivity change: conn=1 online, conn=0 offline
         if action == "event":
             evt = data.get("event", {})
             evt_action = evt.get("action")
 
             if evt_action == "nodeconnect":
                 node_id = evt.get("nodeid")
-                if node_id and node_id in self.data:
+                if node_id and self.data and node_id in self.data:
                     self.data[node_id]["conn"] = evt.get("conn", 0)
                     self.data[node_id]["pwr"] = evt.get("pwr", 0)
                     if "ct" in evt:
@@ -145,18 +144,20 @@ class MeshCentralCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                         self.data[node_id].get("name", node_id),
                         evt.get("conn"),
                     )
-                    self.async_set_updated_data(dict(self.data))
+                    # Only update if we have valid data
+                    if self.data:
+                        self.async_set_updated_data(dict(self.data))
 
             elif evt_action == "changenode":
                 node = evt.get("node", {})
                 node_id = node.get("_id")
-                if node_id and node_id in self.data:
-                    # Merge updated fields into existing node data
+                if node_id and self.data and node_id in self.data:
                     self.data[node_id].update(node)
                     _LOGGER.debug(
                         "changenode: %s updated", node.get("name", node_id)
                     )
-                    self.async_set_updated_data(dict(self.data))
+                    if self.data:
+                        self.async_set_updated_data(dict(self.data))
 
     async def async_shutdown(self) -> None:
         """Cancel event listener and close client."""
