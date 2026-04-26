@@ -1,4 +1,4 @@
-"""Binary sensors for MeshCentral — device online/offline."""
+"""Binary sensors for MeshCentral devices."""
 from __future__ import annotations
 
 from homeassistant.components.binary_sensor import (
@@ -10,7 +10,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import ATTR_IP_ADDRESS, ATTR_LAST_CONNECT, ATTR_MESH_ID, DOMAIN
+from .const import DOMAIN
 from .coordinator import MeshCentralCoordinator
 
 
@@ -19,45 +19,28 @@ async def async_setup_entry(
     entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    """Set up binary sensors."""
     coordinator: MeshCentralCoordinator = hass.data[DOMAIN][entry.entry_id]
-    async_add_entities(
-        MeshCentralDeviceOnlineSensor(coordinator, node_id)
-        for node_id in coordinator.data
-    )
+    entities = []
+    for node_id in coordinator.data:
+        entities += [
+            MeshCentralOnlineSensor(coordinator, node_id),
+            MeshCentralAntivirusSensor(coordinator, node_id),
+            MeshCentralFirewallSensor(coordinator, node_id),
+            MeshCentralDefenderSensor(coordinator, node_id),
+        ]
+    async_add_entities(entities)
 
 
-class MeshCentralDeviceOnlineSensor(
-    CoordinatorEntity[MeshCentralCoordinator], BinarySensorEntity
-):
-    """Binary sensor: is this MeshCentral device currently online?"""
-
-    _attr_device_class = BinarySensorDeviceClass.CONNECTIVITY
+class _Base(CoordinatorEntity[MeshCentralCoordinator], BinarySensorEntity):
     _attr_has_entity_name = True
-    _attr_name = "Online"
 
     def __init__(self, coordinator: MeshCentralCoordinator, node_id: str) -> None:
         super().__init__(coordinator)
         self._node_id = node_id
-        self._attr_unique_id = f"{node_id}_online"
 
     @property
     def _node(self) -> dict:
         return self.coordinator.data.get(self._node_id, {})
-
-    @property
-    def is_on(self) -> bool:
-        # conn == 1 means agent connected
-        return self._node.get("conn", 0) == 1
-
-    @property
-    def extra_state_attributes(self) -> dict:
-        node = self._node
-        return {
-            ATTR_MESH_ID: node.get("meshid"),
-            ATTR_IP_ADDRESS: node.get("ip"),
-            ATTR_LAST_CONNECT: node.get("lastconnect"),
-        }
 
     @property
     def device_info(self):
@@ -67,5 +50,80 @@ class MeshCentralDeviceOnlineSensor(
             "name": node.get("name", self._node_id),
             "manufacturer": "MeshCentral",
             "model": node.get("osdesc", "Unknown OS"),
-            "sw_version": node.get("agent", {}).get("ver"),
+            "sw_version": str(node.get("agent", {}).get("core", "")),
         }
+
+
+class MeshCentralOnlineSensor(_Base):
+    _attr_name = "Online"
+    _attr_device_class = BinarySensorDeviceClass.CONNECTIVITY
+
+    def __init__(self, coordinator, node_id):
+        super().__init__(coordinator, node_id)
+        self._attr_unique_id = f"{node_id}_online"
+
+    @property
+    def is_on(self):
+        return self._node.get("conn", 0) == 1
+
+    @property
+    def extra_state_attributes(self):
+        node = self._node
+        return {
+            "ip": node.get("ip"),
+            "mesh_id": node.get("_meshid"),
+        }
+
+
+class MeshCentralAntivirusSensor(_Base):
+    _attr_name = "Antivirus OK"
+    _attr_device_class = BinarySensorDeviceClass.SAFETY
+    _attr_icon = "mdi:shield-check"
+
+    def __init__(self, coordinator, node_id):
+        super().__init__(coordinator, node_id)
+        self._attr_unique_id = f"{node_id}_av"
+
+    @property
+    def is_on(self):
+        return self._node.get("wsc", {}).get("antiVirus") == "OK"
+
+    @property
+    def available(self):
+        return "wsc" in self._node
+
+
+class MeshCentralFirewallSensor(_Base):
+    _attr_name = "Firewall OK"
+    _attr_device_class = BinarySensorDeviceClass.SAFETY
+    _attr_icon = "mdi:wall-fire"
+
+    def __init__(self, coordinator, node_id):
+        super().__init__(coordinator, node_id)
+        self._attr_unique_id = f"{node_id}_fw"
+
+    @property
+    def is_on(self):
+        return self._node.get("wsc", {}).get("firewall") == "OK"
+
+    @property
+    def available(self):
+        return "wsc" in self._node
+
+
+class MeshCentralDefenderSensor(_Base):
+    _attr_name = "Defender Real-Time Protection"
+    _attr_device_class = BinarySensorDeviceClass.SAFETY
+    _attr_icon = "mdi:shield-lock"
+
+    def __init__(self, coordinator, node_id):
+        super().__init__(coordinator, node_id)
+        self._attr_unique_id = f"{node_id}_defender"
+
+    @property
+    def is_on(self):
+        return self._node.get("defender", {}).get("RealTimeProtection", False)
+
+    @property
+    def available(self):
+        return "defender" in self._node
