@@ -172,7 +172,6 @@ class MeshCentralClient:
             1 = Sleep
             2 = Reboot
             3 = Shutdown / Power off
-            4 = Wake-on-LAN
             5 = Hibernate (Windows only)
         """
         result = await self._send_recv(
@@ -185,6 +184,26 @@ class MeshCentralClient:
             "poweraction",
         )
         return result is not None
+
+    async def send_wol(self, node_id: str) -> str | None:
+        """Send Wake-on-LAN via MeshCentral's wakedevices action.
+
+        MeshCentral finds all online agents on the same network and uses
+        them to broadcast the WOL magic packet to the target device.
+        Returns a result string like 'Used 2 device(s) to send wake packets'
+        or None on failure.
+        """
+        result = await self._send_recv(
+            {
+                "action": "wakedevices",
+                "nodeids": [node_id],
+                "responseid": f"ha-wol-{node_id}",
+            },
+            "wakedevices",
+        )
+        if result:
+            return result.get("result", "ok")
+        return None
 
     async def close(self) -> None:
         """Close the underlying HTTP session."""

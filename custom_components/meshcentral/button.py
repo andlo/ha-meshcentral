@@ -131,12 +131,21 @@ class MeshCentralHibernateButton(_BaseButton):
 
 
 class MeshCentralWolButton(_BaseButton):
-    """Wake-on-LAN via MeshCentral agent on same network."""
+    """Wake-on-LAN via MeshCentral — uses online agents on same network to send magic packet."""
 
     _attr_name = "Wake on LAN"
     _attr_icon = "mdi:lan-pending"
-    _power_action = PWR_WOL
+    _power_action = PWR_WOL  # kept for completeness, not used directly
 
     def __init__(self, coordinator, node_id):
         super().__init__(coordinator, node_id)
         self._attr_unique_id = f"{node_id}_wol"
+
+    async def async_press(self) -> None:
+        node = self._node
+        _LOGGER.debug("Sending WOL to %s", node.get("name"))
+        result = await self.coordinator.client.send_wol(self._node_id)
+        if result:
+            _LOGGER.info("WOL sent to %s: %s", node.get("name"), result)
+        else:
+            _LOGGER.warning("WOL to %s failed — no agents available on same network?", node.get("name"))
