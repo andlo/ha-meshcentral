@@ -109,29 +109,38 @@ class MeshCentralClient:
             return False
 
     async def _login_with_password(self) -> bool:
-        """Username + password login (does not work if 2FA is enabled)."""
+        """Username + password login."""
         session = await self._get_session()
         ssl_ctx = self._ssl_context()
         login_url = f"{self.base_url}/login"
         payload = {"username": self._username, "password": self._password}
+        _LOGGER.warning("MeshCentral login attempt: POST %s", login_url)
         try:
             async with session.post(
                 login_url,
                 data=payload,
                 ssl=ssl_ctx,
-                allow_redirects=True,
+                allow_redirects=False,
                 timeout=aiohttp.ClientTimeout(total=WS_TIMEOUT),
             ) as resp:
-                cookies = session.cookie_jar.filter_cookies(login_url)
+                _LOGGER.warning("MeshCentral login HTTP %s", resp.status)
+                # Read Set-Cookie headers directly from response
+                # (aiohttp cookie jar may miss cookies on non-standard ports)
+                cookies = []
+                for header_name, header_val in resp.raw_headers:
+                    if header_name.lower() == b"set-cookie":
+                        # Extract just the name=value part before first ;
+                        cookie_pair = header_val.decode().split(";")[0].strip()
+                        cookies.append(cookie_pair)
+                        _LOGGER.warning("MeshCentral got Set-Cookie: %s", cookie_pair)
                 if cookies:
-                    self._cookie = "; ".join(
-                        f"{k}={v.value}" for k, v in cookies.items()
-                    )
+                    self._cookie = "; ".join(cookies)
+                    _LOGGER.warning("MeshCentral login OK, cookie: %s", self._cookie[:60])
                     return True
-                _LOGGER.error("Password login failed: HTTP %s", resp.status)
+                _LOGGER.error("MeshCentral login: HTTP %s but no Set-Cookie header", resp.status)
                 return False
         except Exception as err:
-            _LOGGER.error("Password login error: %s", err)
+            _LOGGER.error("MeshCentral login error: %s", err)
             return False
 
     async def _send_recv(self, payload: dict, response_action: str) -> Any:
