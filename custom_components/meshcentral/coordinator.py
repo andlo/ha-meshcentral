@@ -68,10 +68,11 @@ class MeshCentralCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         data = {d["_id"]: d for d in devices if "_id" in d}
 
-        # Start real-time listener if not already running
+        # Start real-time listener as background task — don't await it
         if self._event_task is None or self._event_task.done():
-            self._event_task = self.hass.async_create_task(
-                self._listen_for_events()
+            self._event_task = self.hass.loop.create_task(
+                self._listen_for_events(),
+                name="meshcentral_event_listener",
             )
             _LOGGER.debug("Started MeshCentral real-time event listener")
 
