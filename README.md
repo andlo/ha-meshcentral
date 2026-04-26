@@ -16,14 +16,15 @@ Running MeshCentral alongside Home Assistant is a powerful combination for anyon
 - **Automate around your computers** — trigger automations when a PC comes online (start casting music, turn on the desk lamp), or when it goes offline (cut power to peripherals via a smart plug).
 - **Power control from HA** — wake, reboot, sleep, hibernate or shut down any managed device via HA buttons or automations. Wake-on-LAN works even across subnets since MeshCentral relays the magic packet through its agents.
 - **Security monitoring** — Windows Defender, firewall and antivirus status exposed as binary sensors. Get notified if real-time protection goes offline.
+- **Hardware insight** — CPU, GPU, RAM, disk usage and more available as optional sensors, updated every 5 minutes.
 - **Real-time push** — the integration uses MeshCentral's WebSocket API for instant online/offline updates, not slow polling.
 
 ## Features
 
-### Per device — Sensors
+### Per device — Status sensors
 | Entity | Description |
 |---|---|
-| `binary_sensor.<n>_online` | Agent connectivity (online/offline) |
+| `binary_sensor.<n>_online` | Agent connectivity (online/offline) — real-time |
 | `sensor.<n>_os` | OS description |
 | `sensor.<n>_ip_address` | Last known IP address |
 | `sensor.<n>_last_boot` | Last boot time (timestamp) |
@@ -49,6 +50,33 @@ Running MeshCentral alongside Home Assistant is a powerful combination for anyon
 | `button.<n>_wake_on_lan` | Wake-on-LAN via MeshCentral agents |
 
 **Wake-on-LAN** works even without direct network access — MeshCentral automatically finds online agents on the same network and uses them to broadcast the magic packet.
+
+### Per device — Hardware detail sensors (disabled by default)
+These sensors are fetched every 5 minutes via a separate `getsysinfo` call. They are **disabled by default** — enable them individually under Settings → Devices & Services → MeshCentral → device → Entities.
+
+**All platforms:**
+| Entity | Description |
+|---|---|
+| `sensor.<n>_cpu` | CPU model name |
+| `sensor.<n>_gpu` | GPU model name |
+| `sensor.<n>_bios_version` | BIOS version (vendor + date as attributes) |
+| `sensor.<n>_motherboard` | Motherboard model (vendor as attribute) |
+
+**Windows only:**
+| Entity | Description |
+|---|---|
+| `sensor.<n>_ram_total` | Total RAM in GB |
+| `sensor.<n>_disk_c_total` | C: drive total size in GB |
+| `sensor.<n>_disk_c_free` | C: drive free space in GB |
+| `sensor.<n>_disk_c_free` | C: drive free space in % |
+| `sensor.<n>_running_processes` | Number of running processes |
+| `sensor.<n>_screen_resolution` | Current screen resolution (e.g. 1920x1080) |
+
+**Linux only:**
+| Entity | Description |
+|---|---|
+| `sensor.<n>_disk_used` | Root filesystem used in MB |
+| `sensor.<n>_disk_free` | Root filesystem free in MB |
 
 ## Installation
 
@@ -77,22 +105,52 @@ Go to **Settings → Devices & Services → Add Integration → MeshCentral** an
 
 ### 2FA accounts
 
-If your account has two-factor authentication enabled, create a **Login Token** in MeshCentral → My Account → Login Tokens. Use the generated username (`~t:...`) and password as credentials in HA — this bypasses 2FA.
+If your account has two-factor authentication enabled, create a **Login Token** in MeshCentral → My Account → Login Tokens. Use the generated username (`~t:...`) and password as credentials in HA — this bypasses 2FA entirely.
 
 ### TLS offload / reverse proxy
 
 If MeshCentral runs behind a reverse proxy (Nginx, Cloudflare Tunnel) with `tlsOffload: true`, set **Use SSL = off** and point directly at the internal plain HTTP port — even if that port is 443. The server accepts plain HTTP/WS on that port while the proxy handles TLS externally.
 
-## Polling interval
+## How it works
 
-Devices are polled every 30 seconds by default.
+The integration uses two mechanisms in parallel:
+
+- **Real-time WebSocket push** — a persistent connection to MeshCentral's `/control.ashx` endpoint receives `nodeconnect` events the moment a device goes online or offline. This means online/offline status updates are instant.
+- **Polling fallback** — a full device list refresh runs every 5 minutes to ensure nothing is missed.
+- **Hardware data** — a separate `getsysinfo` call runs every 5 minutes for each online device to update hardware detail sensors.
+
+## Automation examples
+
+```yaml
+# Turn on desk lamp when your PC comes online
+automation:
+  trigger:
+    platform: state
+    entity_id: binary_sensor.fedora_online
+    to: "on"
+  action:
+    service: light.turn_on
+    target:
+      entity_id: light.desk_lamp
+
+# Alert if Windows Defender is disabled
+automation:
+  trigger:
+    platform: state
+    entity_id: binary_sensor.asus_gamerpc_defender_real_time_protection
+    to: "off"
+  action:
+    service: notify.mobile_app
+    data:
+      message: "⚠️ Windows Defender disabled on ASUS-GamerPC!"
+```
 
 ## Roadmap
 
-- [ ] Real-time WebSocket event push (replace polling)
 - [ ] Run custom shell command service
 - [ ] Device tracker entity
 - [ ] Power state sensor (on/off/sleep)
+- [ ] Multiple disk volumes support
 
 ## License
 
