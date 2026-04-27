@@ -158,7 +158,7 @@ class CpuNameSensor(_HwBase):
 
     def __init__(self, coordinator, main, node_id):
         super().__init__(coordinator, main, node_id)
-        self._attr_unique_id = f"{node_id}_hw_cpu"
+        self._attr_unique_id = f"mc_{node_id}_hw_cpu"
 
     @property
     def native_value(self):
@@ -171,7 +171,7 @@ class GpuNameSensor(_HwBase):
 
     def __init__(self, coordinator, main, node_id):
         super().__init__(coordinator, main, node_id)
-        self._attr_unique_id = f"{node_id}_hw_gpu"
+        self._attr_unique_id = f"mc_{node_id}_hw_gpu"
 
     @property
     def native_value(self):
@@ -185,7 +185,7 @@ class BiosVersionSensor(_HwBase):
 
     def __init__(self, coordinator, main, node_id):
         super().__init__(coordinator, main, node_id)
-        self._attr_unique_id = f"{node_id}_hw_bios"
+        self._attr_unique_id = f"mc_{node_id}_hw_bios"
 
     @property
     def native_value(self):
@@ -206,7 +206,7 @@ class BoardNameSensor(_HwBase):
 
     def __init__(self, coordinator, main, node_id):
         super().__init__(coordinator, main, node_id)
-        self._attr_unique_id = f"{node_id}_hw_board"
+        self._attr_unique_id = f"mc_{node_id}_hw_board"
 
     @property
     def native_value(self):
@@ -230,7 +230,7 @@ class RamTotalSensor(_HwBase):
 
     def __init__(self, coordinator, main, node_id):
         super().__init__(coordinator, main, node_id)
-        self._attr_unique_id = f"{node_id}_hw_ram"
+        self._attr_unique_id = f"mc_{node_id}_hw_ram"
 
     @property
     def native_value(self):
@@ -261,7 +261,7 @@ class DiskTotalSensor(_HwBase):
 
     def __init__(self, coordinator, main, node_id):
         super().__init__(coordinator, main, node_id)
-        self._attr_unique_id = f"{node_id}_hw_disk_total"
+        self._attr_unique_id = f"mc_{node_id}_hw_disk_total"
 
     @property
     def native_value(self):
@@ -279,7 +279,7 @@ class DiskFreeSensor(_HwBase):
 
     def __init__(self, coordinator, main, node_id):
         super().__init__(coordinator, main, node_id)
-        self._attr_unique_id = f"{node_id}_hw_disk_free"
+        self._attr_unique_id = f"mc_{node_id}_hw_disk_free"
 
     @property
     def native_value(self):
@@ -296,7 +296,7 @@ class DiskFreePercentSensor(_HwBase):
 
     def __init__(self, coordinator, main, node_id):
         super().__init__(coordinator, main, node_id)
-        self._attr_unique_id = f"{node_id}_hw_disk_pct"
+        self._attr_unique_id = f"mc_{node_id}_hw_disk_pct"
 
     @property
     def native_value(self):
@@ -315,7 +315,7 @@ class ProcessCountSensor(_HwBase):
 
     def __init__(self, coordinator, main, node_id):
         super().__init__(coordinator, main, node_id)
-        self._attr_unique_id = f"{node_id}_hw_procs"
+        self._attr_unique_id = f"mc_{node_id}_hw_procs"
 
     @property
     def native_value(self):
@@ -328,7 +328,7 @@ class ScreenResolutionSensor(_HwBase):
 
     def __init__(self, coordinator, main, node_id):
         super().__init__(coordinator, main, node_id)
-        self._attr_unique_id = f"{node_id}_hw_resolution"
+        self._attr_unique_id = f"mc_{node_id}_hw_resolution"
 
     @property
     def native_value(self):
@@ -353,7 +353,7 @@ class LinuxDiskUsedSensor(_HwBase):
 
     def __init__(self, coordinator, main, node_id):
         super().__init__(coordinator, main, node_id)
-        self._attr_unique_id = f"{node_id}_hw_linux_disk_used"
+        self._attr_unique_id = f"mc_{node_id}_hw_linux_disk_used"
 
     @property
     def native_value(self):
@@ -373,7 +373,7 @@ class LinuxDiskFreeSensor(_HwBase):
 
     def __init__(self, coordinator, main, node_id):
         super().__init__(coordinator, main, node_id)
-        self._attr_unique_id = f"{node_id}_hw_linux_disk_free"
+        self._attr_unique_id = f"mc_{node_id}_hw_linux_disk_free"
 
     @property
     def native_value(self):

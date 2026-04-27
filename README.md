@@ -1,7 +1,6 @@
 # ha-meshcentral
 
-[![hacs_badge](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://github.com/hacs/integration)
-[![GitHub release](https://img.shields.io/github/release/andlo/ha-meshcentral.svg)](https://github.com/andlo/ha-meshcentral/releases)
+[![hacs_badge](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://github.com/hacs/integration)[![GitHub release](https://img.shields.io/github/release/andlo/ha-meshcentral.svg)](https://github.com/andlo/ha-meshcentral/releases)
 
 Home Assistant custom integration for [MeshCentral](https://meshcentral.com) — the open-source remote management platform.
 
@@ -23,67 +22,38 @@ Running MeshCentral alongside Home Assistant is a powerful combination for anyon
 ## Features
 
 ### Per device — Status sensors
-| Entity | Description |
-|---|---|
-| `binary_sensor.<n>_online` | Agent connectivity (online/offline) — real-time |
-| `sensor.<n>_os` | OS description |
-| `sensor.<n>_ip_address` | Last known IP address |
-| `sensor.<n>_last_boot` | Last boot time (timestamp) |
-| `sensor.<n>_idle_time` | User idle time in seconds |
-| `sensor.<n>_active_users` | Currently logged-in users |
-| `sensor.<n>_description` | Device description from MeshCentral |
-| `sensor.<n>_agent_last_seen` | When agent last contacted server |
-| `device_tracker.<n>_tracker` | Home/not_home based on agent connectivity |
+
+EntityDescription`binary_sensor.<n>_online`Agent connectivity (online/offline) — real-time`sensor.<n>_os`OS description`sensor.<n>_ip_address`Last known IP address`sensor.<n>_last_boot`Last boot time (timestamp)`sensor.<n>_idle_time`User idle time in seconds`sensor.<n>_active_users`Currently logged-in users`sensor.<n>_description`Device description from MeshCentral`sensor.<n>_agent_last_seen`When agent last contacted server`device_tracker.<n>_tracker`Home/not_home based on agent connectivity
 
 ### Per device — Security (Windows only)
-| Entity | Description |
-|---|---|
-| `binary_sensor.<n>_antivirus_ok` | Antivirus status |
-| `binary_sensor.<n>_firewall_ok` | Firewall status |
-| `binary_sensor.<n>_defender_real_time_protection` | Windows Defender real-time protection |
+
+EntityDescription`binary_sensor.<n>_antivirus_ok`Antivirus status`binary_sensor.<n>_firewall_ok`Firewall status`binary_sensor.<n>_defender_real_time_protection`Windows Defender real-time protection
 
 ### Per device — Power control
-| Entity | Description |
-|---|---|
-| `button.<n>_reboot` | Reboot device |
-| `button.<n>_shutdown` | Shut down device |
-| `button.<n>_sleep` | Sleep (Windows only) |
-| `button.<n>_hibernate` | Hibernate (Windows only) |
-| `button.<n>_wake_on_lan` | Wake-on-LAN via MeshCentral agents |
+
+EntityDescription`button.<n>_reboot`Reboot device`button.<n>_shutdown`Shut down device`button.<n>_sleep`Sleep (Windows only)`button.<n>_hibernate`Hibernate (Windows only)`button.<n>_wake_on_lan`Wake-on-LAN via MeshCentral agents
 
 **Wake-on-LAN** works even without direct network access — MeshCentral automatically finds online agents on the same network and uses them to broadcast the magic packet.
 
 ### Per device — Hardware detail sensors (disabled by default)
+
 These sensors are fetched every 5 minutes via a separate `getsysinfo` call. They are **disabled by default** — enable them individually under Settings → Devices & Services → MeshCentral → device → Entities.
 
 **All platforms:**
-| Entity | Description |
-|---|---|
-| `sensor.<n>_cpu` | CPU model name |
-| `sensor.<n>_gpu` | GPU model name |
-| `sensor.<n>_bios_version` | BIOS version (vendor + date as attributes) |
-| `sensor.<n>_motherboard` | Motherboard model (vendor as attribute) |
+
+EntityDescription`sensor.<n>_cpu`CPU model name`sensor.<n>_gpu`GPU model name`sensor.<n>_bios_version`BIOS version (vendor + date as attributes)`sensor.<n>_motherboard`Motherboard model (vendor as attribute)
 
 **Windows only:**
-| Entity | Description |
-|---|---|
-| `sensor.<n>_ram_total` | Total RAM in GB |
-| `sensor.<n>_disk_c_total` | C: drive total size in GB |
-| `sensor.<n>_disk_c_free` | C: drive free space in GB |
-| `sensor.<n>_disk_c_free_percent` | C: drive free space in % |
-| `sensor.<n>_running_processes` | Number of running processes |
-| `sensor.<n>_screen_resolution` | Current screen resolution (e.g. 1920x1080) |
+
+EntityDescription`sensor.<n>_ram_total`Total RAM in GB`sensor.<n>_disk_c_total`C: drive total size in GB`sensor.<n>_disk_c_free`C: drive free space in GB`sensor.<n>_disk_c_free_percent`C: drive free space in %`sensor.<n>_running_processes`Number of running processes`sensor.<n>_screen_resolution`Current screen resolution (e.g. 1920x1080)
 
 **Linux only:**
-| Entity | Description |
-|---|---|
-| `sensor.<n>_disk_used` | Root filesystem used in MB |
-| `sensor.<n>_disk_free` | Root filesystem free in MB |
+
+EntityDescription`sensor.<n>_disk_used`Root filesystem used in MB`sensor.<n>_disk_free`Root filesystem free in MB
 
 ### Service
-| Service | Description |
-|---|---|
-| `meshcentral.run_command` | Run a shell command on any online device |
+
+ServiceDescription`meshcentral.run_command`Run a shell command on any online device
 
 ## Installation
 
@@ -102,15 +72,18 @@ Copy `custom_components/meshcentral/` into your HA `custom_components/` director
 A custom card is included in the `www/` folder. Add it as a resource and use it in your dashboards.
 
 **Add as resource** — Settings → Dashboards → Resources → Add resource:
+
 - URL: `/local/meshcentral-card.js`
 - Type: JavaScript module
 
 **Copy the card file to HA:**
+
 ```bash
 cp www/meshcentral-card.js /config/www/
 ```
 
 **Card configuration:**
+
 ```yaml
 type: custom:meshcentral-card
 title: My Computers
@@ -126,14 +99,7 @@ The card shows online/offline status, OS, IP, logged-in users, last boot, securi
 
 Go to **Settings → Devices & Services → Add Integration → MeshCentral** and enter:
 
-| Field | Description |
-|---|---|
-| Host | IP or hostname of your MeshCentral server |
-| Port | Default: 443 |
-| Username | MeshCentral username |
-| Password | MeshCentral password |
-| Use SSL | Enable for HTTPS/WSS (default: off) |
-| Verify SSL | Disable if using self-signed cert (default: off) |
+FieldDescriptionHostIP or hostname of your MeshCentral serverPortDefault: 443UsernameMeshCentral usernamePasswordMeshCentral passwordUse SSLEnable for HTTPS/WSS (default: off)Verify SSLDisable if using self-signed cert (default: off)
 
 ### 2FA accounts
 
@@ -173,14 +139,15 @@ automation:
     to: "off"
   action:
     service: notify.mobile_app
-    data:
-      message: "⚠️ Windows Defender disabled on ASUS-GamerPC!"
+```
+
+data: message: "⚠️ Windows Defender disabled on ASUS-GamerPC!"
+
+```
 
 # Run a command on a device
-service: meshcentral.run_command
-data:
-  device_id: fedora
-  command: "systemctl restart nginx"
+
+service: meshcentral.run_command data: device_id: fedora command: "systemctl restart nginx"
 ```
 
 ## Related
@@ -192,3 +159,9 @@ data:
 ## License
 
 MIT
+
+```
+```
+
+```
+```

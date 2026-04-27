@@ -60,7 +60,7 @@ class MeshCentralOnlineSensor(_Base):
 
     def __init__(self, coordinator, node_id):
         super().__init__(coordinator, node_id)
-        self._attr_unique_id = f"{node_id}_online"
+        self._attr_unique_id = f"mc_{node_id}_online"
 
     @property
     def is_on(self):
@@ -81,7 +81,7 @@ class MeshCentralAntivirusSensor(_Base):
 
     def __init__(self, coordinator, node_id):
         super().__init__(coordinator, node_id)
-        self._attr_unique_id = f"{node_id}_av"
+        self._attr_unique_id = f"mc_{node_id}_av"
 
     @property
     def is_on(self):
@@ -98,7 +98,7 @@ class MeshCentralFirewallSensor(_Base):
 
     def __init__(self, coordinator, node_id):
         super().__init__(coordinator, node_id)
-        self._attr_unique_id = f"{node_id}_fw"
+        self._attr_unique_id = f"mc_{node_id}_fw"
 
     @property
     def is_on(self):
@@ -115,7 +115,7 @@ class MeshCentralDefenderSensor(_Base):
 
     def __init__(self, coordinator, node_id):
         super().__init__(coordinator, node_id)
-        self._attr_unique_id = f"{node_id}_defender"
+        self._attr_unique_id = f"mc_{node_id}_defender"
 
     @property
     def is_on(self):

@@ -71,7 +71,7 @@ class MeshCentralOsSensor(_Base):
 
     def __init__(self, coordinator, node_id):
         super().__init__(coordinator, node_id)
-        self._attr_unique_id = f"{node_id}_os"
+        self._attr_unique_id = f"mc_{node_id}_os"
 
     @property
     def native_value(self):
@@ -84,7 +84,7 @@ class MeshCentralIpSensor(_Base):
 
     def __init__(self, coordinator, node_id):
         super().__init__(coordinator, node_id)
-        self._attr_unique_id = f"{node_id}_ip"
+        self._attr_unique_id = f"mc_{node_id}_ip"
 
     @property
     def native_value(self):
@@ -98,7 +98,7 @@ class MeshCentralLastBootSensor(_Base):
 
     def __init__(self, coordinator, node_id):
         super().__init__(coordinator, node_id)
-        self._attr_unique_id = f"{node_id}_lastboot"
+        self._attr_unique_id = f"mc_{node_id}_lastboot"
 
     @property
     def native_value(self):
@@ -115,7 +115,7 @@ class MeshCentralIdleTimeSensor(_Base):
 
     def __init__(self, coordinator, node_id):
         super().__init__(coordinator, node_id)
-        self._attr_unique_id = f"{node_id}_idletime"
+        self._attr_unique_id = f"mc_{node_id}_idletime"
 
     @property
     def native_value(self):
@@ -128,7 +128,7 @@ class MeshCentralUsersSensor(_Base):
 
     def __init__(self, coordinator, node_id):
         super().__init__(coordinator, node_id)
-        self._attr_unique_id = f"{node_id}_users"
+        self._attr_unique_id = f"mc_{node_id}_users"
 
     @property
     def native_value(self):
@@ -146,7 +146,7 @@ class MeshCentralDescSensor(_Base):
 
     def __init__(self, coordinator, node_id):
         super().__init__(coordinator, node_id)
-        self._attr_unique_id = f"{node_id}_desc"
+        self._attr_unique_id = f"mc_{node_id}_desc"
 
     @property
     def native_value(self):
@@ -160,7 +160,7 @@ class MeshCentralAgentLastSeenSensor(_Base):
 
     def __init__(self, coordinator, node_id):
         super().__init__(coordinator, node_id)
-        self._attr_unique_id = f"{node_id}_agct"
+        self._attr_unique_id = f"mc_{node_id}_agct"
 
     @property
     def native_value(self):

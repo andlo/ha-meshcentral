@@ -96,7 +96,7 @@ class MeshCentralRebootButton(_BaseButton):
 
     def __init__(self, coordinator, node_id):
         super().__init__(coordinator, node_id)
-        self._attr_unique_id = f"{node_id}_reboot"
+        self._attr_unique_id = f"mc_{node_id}_reboot"
 
 
 class MeshCentralShutdownButton(_BaseButton):
@@ -107,7 +107,7 @@ class MeshCentralShutdownButton(_BaseButton):
 
     def __init__(self, coordinator, node_id):
         super().__init__(coordinator, node_id)
-        self._attr_unique_id = f"{node_id}_shutdown"
+        self._attr_unique_id = f"mc_{node_id}_shutdown"
 
 
 class MeshCentralSleepButton(_BaseButton):
@@ -117,7 +117,7 @@ class MeshCentralSleepButton(_BaseButton):
 
     def __init__(self, coordinator, node_id):
         super().__init__(coordinator, node_id)
-        self._attr_unique_id = f"{node_id}_sleep"
+        self._attr_unique_id = f"mc_{node_id}_sleep"
 
 
 class MeshCentralHibernateButton(_BaseButton):
@@ -127,7 +127,7 @@ class MeshCentralHibernateButton(_BaseButton):
 
     def __init__(self, coordinator, node_id):
         super().__init__(coordinator, node_id)
-        self._attr_unique_id = f"{node_id}_hibernate"
+        self._attr_unique_id = f"mc_{node_id}_hibernate"
 
 
 class MeshCentralWolButton(_BaseButton):
@@ -139,7 +139,7 @@ class MeshCentralWolButton(_BaseButton):
 
     def __init__(self, coordinator, node_id):
         super().__init__(coordinator, node_id)
-        self._attr_unique_id = f"{node_id}_wol"
+        self._attr_unique_id = f"mc_{node_id}_wol"
 
     async def async_press(self) -> None:
         node = self._node

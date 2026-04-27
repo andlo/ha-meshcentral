@@ -39,7 +39,7 @@ class MeshCentralDeviceTracker(
     def __init__(self, coordinator: MeshCentralCoordinator, node_id: str) -> None:
         super().__init__(coordinator)
         self._node_id = node_id
-        self._attr_unique_id = f"{node_id}_tracker"
+        self._attr_unique_id = f"mc_{node_id}_tracker"
 
     @property
     def _node(self) -> dict:
