@@ -1,10 +1,6 @@
 # MeshCentral integration for Home Assistant
 
-[![hacs_badge](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://github.com/hacs/integration)
-[![GitHub release](https://img.shields.io/github/release/andlo/ha-meshcentral.svg)](https://github.com/andlo/ha-meshcentral/releases)
-[![License](https://img.shields.io/github/license/andlo/ha-meshcentral.svg)](LICENSE)
-[![Project Maintenance](https://img.shields.io/badge/maintainer-%40andlo-blue.svg)](https://github.com/andlo)
-[![Buy me a coffee](https://img.shields.io/badge/buy%20me%20a%20coffee-donate-yellow.svg)](https://www.buymeacoffee.com/andlo)
+[![hacs_badge](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://github.com/hacs/integration)[![GitHub release](https://img.shields.io/github/release/andlo/ha-meshcentral.svg)](https://github.com/andlo/ha-meshcentral/releases)[![License](https://img.shields.io/github/license/andlo/ha-meshcentral.svg)](LICENSE)
 
 Home Assistant custom integration for [MeshCentral](https://meshcentral.com) — the open-source remote management platform.
 
@@ -13,8 +9,8 @@ Home Assistant custom integration for [MeshCentral](https://meshcentral.com) —
 ## What is MeshCentral?
 
 MeshCentral is a free, open-source remote device management platform you can self-host on your own server. It lets you remotely monitor, manage and control computers and devices — Windows, Linux, and macOS — from a single web interface. Think of it as your own private TeamViewer or AnyDesk, without subscriptions or cloud dependency.
-### Why MeshCentral + Home Assistant?
 
+### Why MeshCentral + Home Assistant?
 Running MeshCentral alongside Home Assistant is a powerful combination for anyone who wants full control over their home network:
 
 - **See all your devices in one place** — PC online/offline status, OS info, last boot time, and logged-in users appear as native HA entities alongside your lights, sensors, and other smart home devices.
