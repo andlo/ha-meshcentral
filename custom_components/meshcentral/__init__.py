@@ -50,3 +50,15 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         await coordinator.async_shutdown()
         hass.data[DOMAIN].pop(f"{entry.entry_id}_hw", None)
     return unload_ok
+
+
+async def async_remove_config_entry_device(
+    hass: HomeAssistant, entry: ConfigEntry, device_entry
+) -> bool:
+    """Allow removing a device from the UI."""
+    return True
+
+
+async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+    """Handle migration of old config entries."""
+    return True

@@ -7,7 +7,9 @@ This document captures technical findings and gotchas discovered while building 
 ### Authentication
 
 - All communication goes through WebSocket on `/control.ashx` — there is no REST API
+
 - Login via HTTP POST to `/login` returns a session cookie in `Set-Cookie` header
+
 - **Important:** `aiohttp`'s cookie jar silently drops cookies on non-standard port combinations (e.g. plain HTTP on port 443). Read `resp.raw_headers` directly instead:
 
   ```python
@@ -15,6 +17,7 @@ This document captures technical findings and gotchas discovered while building 
       if name.lower() == b"set-cookie":
           cookies.append(val.decode().split(";")[0].strip())
   ```
+
 - Login tokens (`~t:...` username format) bypass 2FA entirely and work as normal credentials
 
 ### tlsOffload
