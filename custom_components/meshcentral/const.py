@@ -4,6 +4,7 @@ DOMAIN = "meshcentral"
 
 CONF_USE_SSL = "use_ssl"
 CONF_VERIFY_SSL = "verify_ssl"
+CONF_LOGIN_KEY = "login_key"
 
 DEFAULT_PORT = 443
 DEFAULT_USE_SSL = False
