@@ -14,6 +14,7 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, Upda
 
 from .client import MeshCentralClient
 from .const import (
+    CONF_LOGIN_KEY,
     CONF_USE_SSL,
     CONF_VERIFY_SSL,
     DEFAULT_SCAN_INTERVAL,
@@ -48,6 +49,7 @@ class MeshCentralCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             password=entry.data[CONF_PASSWORD],
             use_ssl=entry.data.get(CONF_USE_SSL, False),
             verify_ssl=entry.data.get(CONF_VERIFY_SSL, False),
+            login_key=entry.data.get(CONF_LOGIN_KEY) or None,
         )
         self._logged_in = False
         self._event_task: asyncio.Task | None = None
@@ -144,7 +146,6 @@ class MeshCentralCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                         self.data[node_id].get("name", node_id),
                         evt.get("conn"),
                     )
-                    # Only update if we have valid data
                     if self.data:
                         self.async_set_updated_data(dict(self.data))
 
