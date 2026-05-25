@@ -10,7 +10,7 @@ from homeassistant.config_entries import ConfigFlow, ConfigFlowResult
 from homeassistant.const import CONF_HOST, CONF_PASSWORD, CONF_PORT, CONF_USERNAME
 
 from .client import MeshCentralClient
-from .const import CONF_USE_SSL, CONF_VERIFY_SSL, DEFAULT_PORT, DOMAIN
+from .const import CONF_LOGIN_KEY, CONF_USE_SSL, CONF_VERIFY_SSL, DEFAULT_PORT, DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -20,6 +20,7 @@ STEP_USER_SCHEMA = vol.Schema(
         vol.Required(CONF_PORT, default=DEFAULT_PORT): int,
         vol.Required(CONF_USERNAME): str,
         vol.Required(CONF_PASSWORD): str,
+        vol.Optional(CONF_LOGIN_KEY, default=""): str,
         vol.Optional(CONF_USE_SSL, default=False): bool,
         vol.Optional(CONF_VERIFY_SSL, default=False): bool,
     }
@@ -37,6 +38,7 @@ class MeshCentralConfigFlow(ConfigFlow, domain=DOMAIN):
         errors: dict[str, str] = {}
 
         if user_input is not None:
+            login_key = user_input.get(CONF_LOGIN_KEY) or None
             client = MeshCentralClient(
                 host=user_input[CONF_HOST],
                 port=user_input[CONF_PORT],
@@ -44,6 +46,7 @@ class MeshCentralConfigFlow(ConfigFlow, domain=DOMAIN):
                 password=user_input[CONF_PASSWORD],
                 use_ssl=user_input.get(CONF_USE_SSL, False),
                 verify_ssl=user_input.get(CONF_VERIFY_SSL, False),
+                login_key=login_key,
             )
             try:
                 ok = await client.login()
