@@ -9,14 +9,18 @@
           "port": "Port",
           "username": "Username",
           "password": "Password",
+          "login_key": "LoginKey (3FA) — leave empty if not used",
           "use_ssl": "Use SSL (disable if behind reverse proxy with tlsOffload)",
           "verify_ssl": "Verify SSL certificate"
+        },
+        "data_description": {
+          "login_key": "Server-level LoginKey for 3FA. If your MeshCentral config.json has LoginKey enabled, all requests must include this key. Find it by running the server with --logintokenkey. This is NOT the same as a per-user Login Token (~t:... username)."
         }
       }
     },
     "error": {
       "cannot_connect": "Cannot connect to MeshCentral server",
-      "invalid_auth": "Authentication failed — check username and password"
+      "invalid_auth": "Authentication failed — check username, password and LoginKey"
     },
     "abort": {
       "already_configured": "This MeshCentral server is already configured"
