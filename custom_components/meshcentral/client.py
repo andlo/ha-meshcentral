@@ -60,11 +60,13 @@ class MeshCentralClient:
 
     @property
     def base_url(self) -> str:
+        """Base URL without path — used for constructing endpoint URLs."""
         scheme = "https" if self._use_ssl else "http"
-        return f"{scheme}://{self._host}:{self._port}{self._key_param}"
+        return f"{scheme}://{self._host}:{self._port}"
 
     @property
     def ws_url(self) -> str:
+        """WebSocket URL for /control.ashx, with optional ?key= after the path."""
         # Use ws:// even on port 443 when tlsOffload=true
         scheme = "wss" if self._use_ssl else "ws"
         return f"{scheme}://{self._host}:{self._port}{WS_CONTROL_PATH}{self._key_param}"
@@ -88,7 +90,7 @@ class MeshCentralClient:
         """Authenticate with MeshCentral and store session cookie."""
         session = await self._get_session()
         ssl_ctx = self._ssl_context()
-        login_url = f"{self.base_url}/login"
+        login_url = f"{self.base_url}/login{self._key_param}"
         payload = {"username": self._username, "password": self._password}
         _LOGGER.debug("Logging in to MeshCentral at %s", login_url)
         try:
