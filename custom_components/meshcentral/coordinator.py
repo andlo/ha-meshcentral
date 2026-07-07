@@ -115,6 +115,7 @@ class MeshCentralCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             timeout=aiohttp.ClientTimeout(total=None),  # keep-alive forever
         ) as ws:
             _LOGGER.debug("MeshCentral event WS connected")
+            await self._refresh_after_reconnect()
             while True:
                 msg = await ws.receive()
                 if msg.type == aiohttp.WSMsgType.TEXT:
@@ -125,6 +126,28 @@ class MeshCentralCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 ):
                     _LOGGER.debug("MeshCentral event WS closed, reconnecting")
                     break
+
+    async def _refresh_after_reconnect(self) -> None:
+        """Poll the full device list right after a WS (re)connect.
+
+        The WebSocket only pushes deltas for devices that change state, so a
+        client that reconnects after a drop (e.g. after sending a WOL command)
+        can otherwise sit with stale/incomplete data until the 5-minute
+        fallback poll runs, causing devices to briefly appear offline. This
+        closes that gap by fetching a fresh full list immediately.
+        """
+        try:
+            devices = await self.client.get_devices()
+        except Exception as err:
+            _LOGGER.warning("MeshCentral post-reconnect poll failed: %s", err)
+            return
+
+        data = {d["_id"]: d for d in devices if "_id" in d}
+        if data:
+            self.async_set_updated_data(data)
+            _LOGGER.debug(
+                "MeshCentral post-reconnect poll refreshed %d devices", len(data)
+            )
 
     async def _handle_event(self, data: dict) -> None:
         """Process a single WebSocket message and update coordinator data."""
