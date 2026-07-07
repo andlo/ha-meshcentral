@@ -26,6 +26,11 @@ class MeshCentralClient:
     Note on tlsOffload: if MeshCentral runs behind a reverse proxy with
     tlsOffload=true, set use_ssl=False even if the port is 443. The server
     accepts plain HTTP/WS on that port while the proxy handles TLS externally.
+
+    Note on LoginKey (3FA): if the MeshCentral server has LoginKey enabled in
+    config.json, ALL requests (including login POST and WebSocket) must include
+    ?key=<loginkey> as a query parameter.  Pass the key via login_key here.
+    This is separate from per-user Login Tokens (~t:... username format).
     """
 
     def __init__(
@@ -36,6 +41,7 @@ class MeshCentralClient:
         password: str,
         use_ssl: bool = True,
         verify_ssl: bool = True,
+        login_key: str | None = None,
     ) -> None:
         self._host = host
         self._port = port
@@ -43,19 +49,27 @@ class MeshCentralClient:
         self._password = password
         self._use_ssl = use_ssl
         self._verify_ssl = verify_ssl
+        self._login_key = login_key or None
         self._session: aiohttp.ClientSession | None = None
         self._cookie: str | None = None
 
     @property
+    def _key_param(self) -> str:
+        """Return ?key=<loginkey> query string if LoginKey (3FA) is configured."""
+        return f"?key={self._login_key}" if self._login_key else ""
+
+    @property
     def base_url(self) -> str:
+        """Base URL without path — used for constructing endpoint URLs."""
         scheme = "https" if self._use_ssl else "http"
         return f"{scheme}://{self._host}:{self._port}"
 
     @property
     def ws_url(self) -> str:
+        """WebSocket URL for /control.ashx, with optional ?key= after the path."""
         # Use ws:// even on port 443 when tlsOffload=true
         scheme = "wss" if self._use_ssl else "ws"
-        return f"{scheme}://{self._host}:{self._port}{WS_CONTROL_PATH}"
+        return f"{scheme}://{self._host}:{self._port}{WS_CONTROL_PATH}{self._key_param}"
 
     def _ssl_context(self) -> ssl.SSLContext | bool:
         if not self._use_ssl:
@@ -76,7 +90,7 @@ class MeshCentralClient:
         """Authenticate with MeshCentral and store session cookie."""
         session = await self._get_session()
         ssl_ctx = self._ssl_context()
-        login_url = f"{self.base_url}/login"
+        login_url = f"{self.base_url}/login{self._key_param}"
         payload = {"username": self._username, "password": self._password}
         _LOGGER.debug("Logging in to MeshCentral at %s", login_url)
         try:
@@ -198,11 +212,11 @@ class MeshCentralClient:
         return result is not None
 
     async def send_wol(self, node_id: str) -> str | None:
-        """Send Wake-on-LAN via MeshCentral's wakedevices action.
+        """Send Wake-on-LAN via MeshCentral wakedevices action.
 
         MeshCentral finds all online agents on the same network and uses
         them to broadcast the WOL magic packet to the target device.
-        Returns a result string like 'Used 2 device(s) to send wake packets'
+        Returns a result string like "Used 2 device(s) to send wake packets"
         or None on failure.
         """
         result = await self._send_recv(
@@ -223,9 +237,6 @@ class MeshCentralClient:
         """Run a shell command on a device via MeshCentral agent.
 
         Returns command output as string, or None on timeout/failure.
-        Note: MeshCentral runs the command asynchronously — the response
-        contains a runid which can be used to track the result. We wait
-        up to WS_TIMEOUT seconds for the result to come back.
         """
         result = await self._send_recv(
             {

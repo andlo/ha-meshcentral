@@ -102,11 +102,34 @@ The card shows online/offline status, OS, IP, logged-in users, last boot, securi
 
 Go to **Settings → Devices & Services → Add Integration → MeshCentral** and enter:
 
-FieldDescriptionHostIP or hostname of your MeshCentral serverPortDefault: 443UsernameMeshCentral usernamePasswordMeshCentral passwordUse SSLEnable for HTTPS/WSS (default: off)Verify SSLDisable if using self-signed cert (default: off)
+| Field | Description |
+|---|---|
+| Host | IP or hostname of your MeshCentral server |
+| Port | Default: 443 |
+| Username | MeshCentral username |
+| Password | MeshCentral password |
+| Login Key | Server-level LoginKey for 3FA — leave empty if not used (see below) |
+| Use SSL | Enable for HTTPS/WSS (default: off) |
+| Verify SSL | Disable if using self-signed cert (default: off) |
 
 ### 2FA accounts
 
 If your account has two-factor authentication enabled, create a **Login Token** in MeshCentral → My Account → Login Tokens. Use the generated username (`~t:...`) and password as credentials in HA — this bypasses 2FA entirely.
+
+### LoginKey (3FA) — server-level access key
+
+Some MeshCentral servers are configured with a **LoginKey** in `config.json`. This is a server-level 3FA feature that requires all requests — including the login page itself — to include a `?key=<value>` query parameter. Without it, the server blocks access before any authentication can occur.
+
+If your server uses this, you will see an auth failure even with correct username and password. Enter the LoginKey value in the **Login Key** field during setup.
+
+> **LoginKey vs Login Token — these are two different things:**
+>
+> | | What it is | Where to find it | Used as |
+> |---|---|---|---|
+> | **Login Key** (3FA) | Server-level URL access key | `config.json` → run server with `--logintokenkey` | The *Login Key* field in this integration |
+> | **Login Token** (2FA bypass) | Per-user temporary token | MeshCentral → My Account → Login Tokens | The *Username* field (as `~t:...`) |
+>
+> You may need both at the same time if your server uses LoginKey AND your account has 2FA enabled.
 
 ### TLS offload / reverse proxy
 
@@ -142,15 +165,14 @@ automation:
     to: "off"
   action:
     service: notify.mobile_app
-```
-
-data: message: "⚠️ Windows Defender disabled on ASUS-GamerPC!"
-
-```
+    data:
+      message: "⚠️ Windows Defender disabled on ASUS-GamerPC!"
 
 # Run a command on a device
-
-service: meshcentral.run_command data: device_id: fedora command: "systemctl restart nginx"
+service: meshcentral.run_command
+data:
+  device_id: fedora
+  command: "systemctl restart nginx"
 ```
 
 ## Related
@@ -162,27 +184,3 @@ service: meshcentral.run_command data: device_id: fedora command: "systemctl res
 ## License
 
 MIT
-
-```
-```
-
-```
-```
-
-```
-```
-
-```
-```
-
-```
-```
-
-```
-```
-
-```
-```
-
-```
-```
