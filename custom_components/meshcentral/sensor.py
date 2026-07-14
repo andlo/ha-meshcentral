@@ -9,7 +9,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import DOMAIN
+from .const import DOMAIN, POWER_STATE_MAP, POWER_STATE_UNKNOWN
 from .coordinator import MeshCentralCoordinator
 from .sensor_hardware import HardwareDataCoordinator, async_setup_hardware_entities
 
@@ -32,6 +32,7 @@ async def async_setup_entry(
             MeshCentralUsersSensor(coordinator, node_id),
             MeshCentralDescSensor(coordinator, node_id),
             MeshCentralAgentLastSeenSensor(coordinator, node_id),
+            MeshCentralPowerStateSensor(coordinator, node_id),
         ]
     async_add_entities(entities)
 
@@ -168,3 +169,27 @@ class MeshCentralAgentLastSeenSensor(_Base):
         if ts:
             return datetime.fromtimestamp(ts / 1000, tz=timezone.utc)
         return None
+
+
+class MeshCentralPowerStateSensor(_Base):
+    """Power state (on/off/sleep/hibernate/soft-off/cycle) for a device.
+
+    MeshCentral reports this via the numeric "pwr" field on the node and in
+    "nodeconnect" WebSocket events. See const.POWER_STATE_MAP for the mapping.
+    """
+
+    _attr_name = "Power State"
+    _attr_icon = "mdi:power-settings"
+    _attr_device_class = SensorDeviceClass.ENUM
+    _attr_options = list(POWER_STATE_MAP.values()) + [POWER_STATE_UNKNOWN]
+
+    def __init__(self, coordinator, node_id):
+        super().__init__(coordinator, node_id)
+        self._attr_unique_id = f"mc_{node_id}_pwr"
+
+    @property
+    def native_value(self):
+        pwr = self._node.get("pwr")
+        if pwr is None:
+            return POWER_STATE_UNKNOWN
+        return POWER_STATE_MAP.get(pwr, POWER_STATE_UNKNOWN)
