@@ -27,6 +27,18 @@ from .coordinator import MeshCentralCoordinator
 _LOGGER = logging.getLogger(__name__)
 
 
+def _win_volume_slug(drive_letter: str) -> str:
+    """Turn a Windows drive letter (e.g. 'D') into an entity-id-safe slug."""
+    return drive_letter.strip().rstrip(":").lower()
+
+
+def _linux_mount_slug(mount_point: str) -> str:
+    """Turn a Linux mount point (e.g. '/home') into an entity-id-safe slug."""
+    if mount_point in ("/", ""):
+        return "root"
+    return mount_point.strip("/").replace("/", "_").lower() or "root"
+
+
 class HardwareDataCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     """Coordinator that fetches getsysinfo for all online devices every 5 min."""
 
@@ -88,19 +100,37 @@ async def async_setup_hardware_entities(
         if is_windows:
             entities += [
                 RamTotalSensor(hw_coordinator, main, node_id),
-                DiskTotalSensor(hw_coordinator, main, node_id),
-                DiskFreeSensor(hw_coordinator, main, node_id),
-                DiskFreePercentSensor(hw_coordinator, main, node_id),
                 ProcessCountSensor(hw_coordinator, main, node_id),
                 ScreenResolutionSensor(hw_coordinator, main, node_id),
             ]
+            win_volumes = hw.get("windows", {}).get("volumes", {})
+            if win_volumes:
+                for drive_letter in win_volumes:
+                    entities += [
+                        WindowsDiskTotalSensor(hw_coordinator, main, node_id, drive_letter),
+                        WindowsDiskFreeSensor(hw_coordinator, main, node_id, drive_letter),
+                        WindowsDiskFreePercentSensor(hw_coordinator, main, node_id, drive_letter),
+                    ]
+            else:
+                # No sysinfo fetched yet for this device — fall back to the
+                # C: drive so entities still get created on first setup.
+                entities += [
+                    WindowsDiskTotalSensor(hw_coordinator, main, node_id, "C"),
+                    WindowsDiskFreeSensor(hw_coordinator, main, node_id, "C"),
+                    WindowsDiskFreePercentSensor(hw_coordinator, main, node_id, "C"),
+                ]
 
         # Linux
         if is_linux:
-            entities += [
-                LinuxDiskUsedSensor(hw_coordinator, main, node_id),
-                LinuxDiskFreeSensor(hw_coordinator, main, node_id),
-            ]
+            linux_volumes = hw.get("linux", {}).get("volumes", [])
+            mount_points = [v.get("mount_point") for v in linux_volumes if v.get("mount_point")]
+            if not mount_points:
+                mount_points = ["/"]
+            for mount_point in mount_points:
+                entities += [
+                    LinuxDiskUsedSensor(hw_coordinator, main, node_id, mount_point),
+                    LinuxDiskFreeSensor(hw_coordinator, main, node_id, mount_point),
+                ]
 
     async_add_entities(entities)
 
@@ -252,55 +282,71 @@ class RamTotalSensor(_HwBase):
         return round(total / (1024 ** 3), 1) if total else None
 
 
-class DiskTotalSensor(_HwBase):
-    _attr_name = "Disk C: Total"
+class WindowsDiskTotalSensor(_HwBase):
     _attr_icon = "mdi:harddisk"
     _attr_native_unit_of_measurement = UnitOfInformation.GIGABYTES
     _attr_device_class = SensorDeviceClass.DATA_SIZE
     _attr_state_class = SensorStateClass.MEASUREMENT
 
-    def __init__(self, coordinator, main, node_id):
+    def __init__(self, coordinator, main, node_id, drive_letter: str):
         super().__init__(coordinator, main, node_id)
-        self._attr_unique_id = f"mc_{node_id}_hw_disk_total"
+        self._drive_letter = drive_letter
+        self._attr_name = f"Disk {drive_letter}: Total"
+        if drive_letter.upper() == "C":
+            # Keep the original unique_id for backwards compatibility.
+            self._attr_unique_id = f"mc_{node_id}_hw_disk_total"
+        else:
+            slug = _win_volume_slug(drive_letter)
+            self._attr_unique_id = f"mc_{node_id}_hw_disk_{slug}_total"
 
     @property
     def native_value(self):
-        vol = self._win.get("volumes", {}).get("C", {})
+        vol = self._win.get("volumes", {}).get(self._drive_letter, {})
         size = vol.get("size", 0)
         return round(size / (1024 ** 3), 1) if size else None
 
 
-class DiskFreeSensor(_HwBase):
-    _attr_name = "Disk C: Free"
+class WindowsDiskFreeSensor(_HwBase):
     _attr_icon = "mdi:harddisk"
     _attr_native_unit_of_measurement = UnitOfInformation.GIGABYTES
     _attr_device_class = SensorDeviceClass.DATA_SIZE
     _attr_state_class = SensorStateClass.MEASUREMENT
 
-    def __init__(self, coordinator, main, node_id):
+    def __init__(self, coordinator, main, node_id, drive_letter: str):
         super().__init__(coordinator, main, node_id)
-        self._attr_unique_id = f"mc_{node_id}_hw_disk_free"
+        self._drive_letter = drive_letter
+        self._attr_name = f"Disk {drive_letter}: Free"
+        if drive_letter.upper() == "C":
+            self._attr_unique_id = f"mc_{node_id}_hw_disk_free"
+        else:
+            slug = _win_volume_slug(drive_letter)
+            self._attr_unique_id = f"mc_{node_id}_hw_disk_{slug}_free"
 
     @property
     def native_value(self):
-        vol = self._win.get("volumes", {}).get("C", {})
+        vol = self._win.get("volumes", {}).get(self._drive_letter, {})
         free = vol.get("sizeremaining", 0)
         return round(free / (1024 ** 3), 1) if free else None
 
 
-class DiskFreePercentSensor(_HwBase):
-    _attr_name = "Disk C: Free %"
+class WindowsDiskFreePercentSensor(_HwBase):
     _attr_icon = "mdi:harddisk"
     _attr_native_unit_of_measurement = PERCENTAGE
     _attr_state_class = SensorStateClass.MEASUREMENT
 
-    def __init__(self, coordinator, main, node_id):
+    def __init__(self, coordinator, main, node_id, drive_letter: str):
         super().__init__(coordinator, main, node_id)
-        self._attr_unique_id = f"mc_{node_id}_hw_disk_pct"
+        self._drive_letter = drive_letter
+        self._attr_name = f"Disk {drive_letter}: Free %"
+        if drive_letter.upper() == "C":
+            self._attr_unique_id = f"mc_{node_id}_hw_disk_pct"
+        else:
+            slug = _win_volume_slug(drive_letter)
+            self._attr_unique_id = f"mc_{node_id}_hw_disk_{slug}_pct"
 
     @property
     def native_value(self):
-        vol = self._win.get("volumes", {}).get("C", {})
+        vol = self._win.get("volumes", {}).get(self._drive_letter, {})
         size = vol.get("size", 0)
         free = vol.get("sizeremaining", 0)
         if size and free:
@@ -345,40 +391,51 @@ class ScreenResolutionSensor(_HwBase):
 # ── Linux sensors ──────────────────────────────────────────────────────────────
 
 class LinuxDiskUsedSensor(_HwBase):
-    _attr_name = "Disk / Used"
     _attr_icon = "mdi:harddisk"
     _attr_native_unit_of_measurement = UnitOfInformation.MEGABYTES
     _attr_device_class = SensorDeviceClass.DATA_SIZE
     _attr_state_class = SensorStateClass.MEASUREMENT
 
-    def __init__(self, coordinator, main, node_id):
+    def __init__(self, coordinator, main, node_id, mount_point: str):
         super().__init__(coordinator, main, node_id)
-        self._attr_unique_id = f"mc_{node_id}_hw_linux_disk_used"
+        self._mount_point = mount_point
+        self._attr_name = f"Disk {mount_point} Used"
+        if mount_point == "/":
+            # Keep the original unique_id for backwards compatibility.
+            self._attr_unique_id = f"mc_{node_id}_hw_linux_disk_used"
+        else:
+            slug = _linux_mount_slug(mount_point)
+            self._attr_unique_id = f"mc_{node_id}_hw_linux_disk_{slug}_used"
 
     @property
     def native_value(self):
         for vol in self._linux.get("volumes", []):
-            if vol.get("mount_point") == "/":
+            if vol.get("mount_point") == self._mount_point:
                 used = vol.get("used", 0)
                 return round(int(used) / 1024, 1) if used else None
         return None
 
 
 class LinuxDiskFreeSensor(_HwBase):
-    _attr_name = "Disk / Free"
     _attr_icon = "mdi:harddisk"
     _attr_native_unit_of_measurement = UnitOfInformation.MEGABYTES
     _attr_device_class = SensorDeviceClass.DATA_SIZE
     _attr_state_class = SensorStateClass.MEASUREMENT
 
-    def __init__(self, coordinator, main, node_id):
+    def __init__(self, coordinator, main, node_id, mount_point: str):
         super().__init__(coordinator, main, node_id)
-        self._attr_unique_id = f"mc_{node_id}_hw_linux_disk_free"
+        self._mount_point = mount_point
+        self._attr_name = f"Disk {mount_point} Free"
+        if mount_point == "/":
+            self._attr_unique_id = f"mc_{node_id}_hw_linux_disk_free"
+        else:
+            slug = _linux_mount_slug(mount_point)
+            self._attr_unique_id = f"mc_{node_id}_hw_linux_disk_{slug}_free"
 
     @property
     def native_value(self):
         for vol in self._linux.get("volumes", []):
-            if vol.get("mount_point") == "/":
+            if vol.get("mount_point") == self._mount_point:
                 avail = vol.get("available", 0)
                 return round(int(avail) / 1024, 1) if avail else None
         return None

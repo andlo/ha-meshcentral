@@ -50,9 +50,13 @@ EntityDescription`sensor.<n>_cpu`CPU model name`sensor.<n>_gpu`GPU model name`se
 
 EntityDescription`sensor.<n>_ram_total`Total RAM in GB`sensor.<n>_disk_c_total`C: drive total size in GB`sensor.<n>_disk_c_free`C: drive free space in GB`sensor.<n>_disk_c_free_percent`C: drive free space in %`sensor.<n>_running_processes`Number of running processes`sensor.<n>_screen_resolution`Current screen resolution (e.g. 1920x1080)
 
+Additional volumes beyond C: (D:, E:, ...) get their own set of Total/Free/Free % sensors automatically, named after the drive letter.
+
 **Linux only:**
 
 EntityDescription`sensor.<n>_disk_used`Root filesystem used in MB`sensor.<n>_disk_free`Root filesystem free in MB
+
+Additional mount points beyond / (e.g. /home, /mnt/data) get their own Used/Free sensors automatically, named after the mount point.
 
 ### Service
 
