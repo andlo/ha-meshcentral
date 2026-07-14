@@ -6,7 +6,7 @@ import logging
 import voluptuous as vol
 from homeassistant.core import HomeAssistant, ServiceCall, ServiceResponse, SupportsResponse
 from homeassistant.helpers import config_validation as cv
-from homeassistant.helpers.persistent_notification import async_create as async_create_notification
+from homeassistant.components.persistent_notification import async_create as async_create_notification
 
 from .const import DOMAIN
 from .coordinator import MeshCentralCoordinator

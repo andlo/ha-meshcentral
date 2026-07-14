@@ -1,12 +1,12 @@
 {
   "domain": "meshcentral",
   "name": "MeshCentral",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "documentation": "https://github.com/andlo/ha-meshcentral",
   "issue_tracker": "https://github.com/andlo/ha-meshcentral/issues",
   "codeowners": ["@andlo"],
   "config_flow": true,
   "iot_class": "local_push",
   "requirements": [],
-  "dependencies": []
+  "dependencies": ["persistent_notification"]
 }
