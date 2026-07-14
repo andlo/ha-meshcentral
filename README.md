@@ -58,6 +58,8 @@ EntityDescription`sensor.<n>_disk_used`Root filesystem used in MB`sensor.<n>_dis
 
 ServiceDescription`meshcentral.run_command`Run a shell command on any online device
 
+`run_command` always fires a `meshcentral_command_result` event with `device_id`, `device_name`, `command`, `success`, and `output`, and returns the same data as a service response (use `response_variable` in scripts/automations to capture it). Set `notify: true` to also create a persistent notification with the output.
+
 ## Installation
 
 ### Via HACS (recommended)
@@ -168,11 +170,22 @@ automation:
     data:
       message: "⚠️ Windows Defender disabled on ASUS-GamerPC!"
 
-# Run a command on a device
+# Run a command on a device and get a notification with the output
 service: meshcentral.run_command
 data:
   device_id: fedora
   command: "systemctl restart nginx"
+  notify: true
+
+# Or capture the result in a script/automation
+- service: meshcentral.run_command
+  data:
+    device_id: fedora
+    command: "uptime"
+  response_variable: cmd_result
+- service: notify.mobile_app
+  data:
+    message: "{{ cmd_result.output }}"
 ```
 
 ## Related

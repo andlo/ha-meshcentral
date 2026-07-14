@@ -25,3 +25,12 @@ run_command:
       default: false
       selector:
         boolean:
+    notify:
+      name: Notify
+      description: >
+        Create a persistent notification in Home Assistant with the command output.
+        A "meshcentral_command_result" event is always fired regardless of this setting.
+      required: false
+      default: false
+      selector:
+        boolean:
