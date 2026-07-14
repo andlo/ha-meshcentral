@@ -26,7 +26,7 @@ Running MeshCentral alongside Home Assistant is a powerful combination for anyon
 
 ### Per device — Status sensors
 
-EntityDescription`binary_sensor.<n>_online`Agent connectivity (online/offline) — real-time`sensor.<n>_os`OS description`sensor.<n>_ip_address`Last known IP address`sensor.<n>_last_boot`Last boot time (timestamp)`sensor.<n>_idle_time`User idle time in seconds`sensor.<n>_active_users`Currently logged-in users`sensor.<n>_description`Device description from MeshCentral`sensor.<n>_agent_last_seen`When agent last contacted server`device_tracker.<n>_tracker`Home/not_home based on agent connectivity
+EntityDescription`binary_sensor.<n>_online`Agent connectivity (online/offline) — real-time`sensor.<n>_os`OS description`sensor.<n>_ip_address`Last known IP address`sensor.<n>_last_boot`Last boot time (timestamp)`sensor.<n>_idle_time`User idle time in seconds`sensor.<n>_active_users`Currently logged-in users`sensor.<n>_description`Device description from MeshCentral`sensor.<n>_agent_last_seen`When agent last contacted server`sensor.<n>_power_state`Power state: on / off / sleep / hibernate / soft_off / cycle`device_tracker.<n>_tracker`Home/not_home based on agent connectivity
 
 ### Per device — Security (Windows only)
 

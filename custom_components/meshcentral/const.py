@@ -20,3 +20,15 @@ ATTR_AGENT_VERSION = "agent_version"
 ATTR_IP_ADDRESS = "ip_address"
 ATTR_LAST_CONNECT = "last_connect"
 ATTR_POWER_STATE = "power_state"
+
+# Mapping of MeshCentral's numeric "pwr" node field to a human-readable state.
+# See: https://github.com/Ylianst/MeshCentral (nodeconnect / node "pwr" field)
+POWER_STATE_MAP = {
+    0: "off",
+    1: "on",
+    2: "sleep",
+    3: "hibernate",
+    4: "soft_off",
+    5: "cycle",
+}
+POWER_STATE_UNKNOWN = "unknown"
