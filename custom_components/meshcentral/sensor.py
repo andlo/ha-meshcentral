@@ -12,6 +12,7 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from .const import DOMAIN, POWER_STATE_MAP, POWER_STATE_UNKNOWN
 from .coordinator import MeshCentralCoordinator
 from .sensor_hardware import HardwareDataCoordinator, async_setup_hardware_entities
+from .sensor_serverstats import async_setup_server_stats_entities
 from .sensor_serverversion import async_setup_server_version_entities
 
 
@@ -45,6 +46,9 @@ async def async_setup_entry(
 
     # Server-level version sensors (installed / latest available)
     await async_setup_server_version_entities(hass, entry, coordinator, async_add_entities)
+
+    # Server-level count sensors (devices online/offline, meshes, accounts)
+    await async_setup_server_stats_entities(hass, entry, coordinator, async_add_entities)
 
 
 class _Base(CoordinatorEntity[MeshCentralCoordinator], SensorEntity):

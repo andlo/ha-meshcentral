@@ -177,6 +177,21 @@ class MeshCentralClient:
             return []
         return result.get("meshes", [])
 
+    async def get_users(self) -> list[dict]:
+        """Return all user accounts on the server.
+
+        Requires site-admin rights. Unlike serverversion/serverupdate, this
+        works fine for Login Token sessions too — confirmed against a live
+        server.
+        """
+        result = await self._send_recv(
+            {"action": "users", "responseid": "ha-users"},
+            "users",
+        )
+        if result is None:
+            return []
+        return result.get("users", [])
+
     async def get_server_version_tags(self) -> dict | None:
         """Return the server's own version info, if this session is allowed to.
 
