@@ -21,7 +21,7 @@ from homeassistant.helpers.update_coordinator import (
     UpdateFailed,
 )
 
-from .const import DOMAIN
+from .const import CONF_HW_SCAN_INTERVAL, DEFAULT_HW_SCAN_INTERVAL, DOMAIN
 from .coordinator import MeshCentralCoordinator
 
 _LOGGER = logging.getLogger(__name__)
@@ -40,13 +40,14 @@ def _linux_mount_slug(mount_point: str) -> str:
 
 
 class HardwareDataCoordinator(DataUpdateCoordinator[dict[str, Any]]):
-    """Coordinator that fetches getsysinfo for all online devices every 5 min."""
+    """Coordinator that fetches getsysinfo for all online devices."""
 
     def __init__(self, hass: HomeAssistant, main: MeshCentralCoordinator) -> None:
+        minutes = main.entry.options.get(CONF_HW_SCAN_INTERVAL, DEFAULT_HW_SCAN_INTERVAL)
         super().__init__(
             hass, _LOGGER,
             name=f"{DOMAIN}_hardware",
-            update_interval=timedelta(minutes=5),
+            update_interval=timedelta(minutes=minutes),
         )
         self._main = main
 

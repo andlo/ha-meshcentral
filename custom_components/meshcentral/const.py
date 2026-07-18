@@ -9,7 +9,12 @@ CONF_LOGIN_KEY = "login_key"
 DEFAULT_PORT = 443
 DEFAULT_USE_SSL = False
 DEFAULT_VERIFY_SSL = False
-DEFAULT_SCAN_INTERVAL = 30
+
+# Options flow keys for configurable poll intervals (in minutes)
+CONF_MAIN_SCAN_INTERVAL = "main_scan_interval"
+CONF_HW_SCAN_INTERVAL = "hw_scan_interval"
+DEFAULT_MAIN_SCAN_INTERVAL = 5  # minutes — fallback poll behind the WS push
+DEFAULT_HW_SCAN_INTERVAL = 5  # minutes — getsysinfo poll for hardware sensors
 
 # Device attributes
 ATTR_NODE_ID = "node_id"

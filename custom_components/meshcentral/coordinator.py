@@ -14,10 +14,12 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, Upda
 
 from .client import MeshCentralClient
 from .const import (
+    CONF_HW_SCAN_INTERVAL,
     CONF_LOGIN_KEY,
+    CONF_MAIN_SCAN_INTERVAL,
     CONF_USE_SSL,
     CONF_VERIFY_SSL,
-    DEFAULT_SCAN_INTERVAL,
+    DEFAULT_MAIN_SCAN_INTERVAL,
     DOMAIN,
 )
 
@@ -35,11 +37,12 @@ class MeshCentralCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     """
 
     def __init__(self, hass: HomeAssistant, entry: ConfigEntry) -> None:
+        minutes = entry.options.get(CONF_MAIN_SCAN_INTERVAL, DEFAULT_MAIN_SCAN_INTERVAL)
         super().__init__(
             hass,
             _LOGGER,
             name=DOMAIN,
-            update_interval=timedelta(seconds=300),  # fallback poll every 5 min
+            update_interval=timedelta(minutes=minutes),  # fallback poll behind WS push
         )
         self.entry = entry
         self.client = MeshCentralClient(
