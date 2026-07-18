@@ -177,6 +177,29 @@ class MeshCentralClient:
             return []
         return result.get("meshes", [])
 
+    async def get_server_version_tags(self) -> dict | None:
+        """Return the server's own version info, if this session is allowed to.
+
+        MeshCentral only answers the "serverversion" action for full site
+        administrators authenticated with a regular username/password login —
+        it is explicitly refused for sessions using a Login Token (the
+        "~t:..." username used to bypass 2FA), and requires the account's
+        "update" site-right. Returns None if unavailable for either reason;
+        callers should treat that as "unknown", not an error.
+
+        On success, the dict has a "current" key with the installed version,
+        and usually a "latest" key with the latest published version (from
+        the server's own npm dist-tag check) — but "latest" may be absent if
+        the server itself has no internet/npm access.
+        """
+        result = await self._send_recv(
+            {"action": "serverversion", "responseid": "ha-serverversion"},
+            "serverversion",
+        )
+        if result and isinstance(result.get("tags"), dict):
+            return result["tags"]
+        return None
+
     async def get_sysinfo(self, node_id: str) -> dict | None:
         """Return full hardware/sysinfo for a single device."""
         result = await self._send_recv(
