@@ -141,6 +141,10 @@ If your server uses this, you will see an auth failure even with correct usernam
 
 If MeshCentral runs behind a reverse proxy (Nginx, Cloudflare Tunnel) with `tlsOffload: true`, set **Use SSL = off** and point directly at the internal plain HTTP port — even if that port is 443. The server accepts plain HTTP/WS on that port while the proxy handles TLS externally.
 
+### Poll intervals
+
+The device list updates instantly via WebSocket push — polling is just the fallback for missed events, plus the separate hardware (`getsysinfo`) poll. Both default to 5 minutes and can be changed under **Settings → Devices & Services → MeshCentral → Configure**, without needing to remove and re-add the integration.
+
 ## How it works
 
 The integration uses two mechanisms in parallel:

@@ -25,5 +25,17 @@
     "abort": {
       "already_configured": "This MeshCentral server is already configured"
     }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "MeshCentral poll intervals",
+        "description": "The device list also updates instantly via WebSocket push — these intervals only control the fallback poll and the hardware (getsysinfo) poll.",
+        "data": {
+          "main_scan_interval": "Main fallback poll interval (minutes)",
+          "hw_scan_interval": "Hardware sysinfo poll interval (minutes)"
+        }
+      }
+    }
   }
 }

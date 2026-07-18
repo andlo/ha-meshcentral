@@ -6,11 +6,22 @@ from typing import Any
 
 import voluptuous as vol
 
-from homeassistant.config_entries import ConfigFlow, ConfigFlowResult
+from homeassistant.config_entries import ConfigFlow, ConfigFlowResult, OptionsFlow
 from homeassistant.const import CONF_HOST, CONF_PASSWORD, CONF_PORT, CONF_USERNAME
+from homeassistant.core import callback
 
 from .client import MeshCentralClient
-from .const import CONF_LOGIN_KEY, CONF_USE_SSL, CONF_VERIFY_SSL, DEFAULT_PORT, DOMAIN
+from .const import (
+    CONF_HW_SCAN_INTERVAL,
+    CONF_LOGIN_KEY,
+    CONF_MAIN_SCAN_INTERVAL,
+    CONF_USE_SSL,
+    CONF_VERIFY_SSL,
+    DEFAULT_HW_SCAN_INTERVAL,
+    DEFAULT_MAIN_SCAN_INTERVAL,
+    DEFAULT_PORT,
+    DOMAIN,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -31,6 +42,11 @@ class MeshCentralConfigFlow(ConfigFlow, domain=DOMAIN):
     """Handle a config flow for MeshCentral."""
 
     VERSION = 1
+
+    @staticmethod
+    @callback
+    def async_get_options_flow(config_entry) -> MeshCentralOptionsFlow:
+        return MeshCentralOptionsFlow(config_entry)
 
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
@@ -73,3 +89,35 @@ class MeshCentralConfigFlow(ConfigFlow, domain=DOMAIN):
             data_schema=STEP_USER_SCHEMA,
             errors=errors,
         )
+
+
+class MeshCentralOptionsFlow(OptionsFlow):
+    """Options flow: let the user tune the poll intervals.
+
+    self.config_entry is provided automatically by the base OptionsFlow
+    class (HA 2024.12+) — no need to store it ourselves.
+    """
+
+    def __init__(self, config_entry) -> None:
+        pass
+
+    async def async_step_init(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        if user_input is not None:
+            return self.async_create_entry(data=user_input)
+
+        current = self.config_entry.options
+        schema = vol.Schema(
+            {
+                vol.Optional(
+                    CONF_MAIN_SCAN_INTERVAL,
+                    default=current.get(CONF_MAIN_SCAN_INTERVAL, DEFAULT_MAIN_SCAN_INTERVAL),
+                ): vol.All(int, vol.Range(min=1, max=60)),
+                vol.Optional(
+                    CONF_HW_SCAN_INTERVAL,
+                    default=current.get(CONF_HW_SCAN_INTERVAL, DEFAULT_HW_SCAN_INTERVAL),
+                ): vol.All(int, vol.Range(min=1, max=60)),
+            }
+        )
+        return self.async_show_form(step_id="init", data_schema=schema)
