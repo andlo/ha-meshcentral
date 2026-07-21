@@ -442,7 +442,12 @@ class BatteryLevelSensor(_HwBase):
 
     @property
     def _battery(self) -> dict:
-        batteries = self._win.get("battery", [])
+        # NOTE: "battery" is a sibling of "windows" directly under
+        # "hardware" (hardware.battery), NOT hardware.windows.battery like
+        # memory/osinfo/cpu/gpu/volumes are. Confirmed against two live
+        # payloads on #25 — the first beta used self._win by mistake, which
+        # is why it stayed unavailable even with correct field names.
+        batteries = self._hw.get("battery", [])
         return batteries[0] if batteries else {}
 
     @property
