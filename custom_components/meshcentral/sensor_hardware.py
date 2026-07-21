@@ -399,21 +399,35 @@ class WindowsDiskFreePercentSensor(_HwBase):
 class BatteryLevelSensor(_HwBase):
     """Battery charge level for laptops.
 
-    MeshCentral's getsysinfo passes most Windows hardware data straight
-    through from WMI (see RamTotalSensor's Capacity/osinfo's
-    NumberOfProcesses/gpu's CurrentHorizontalResolution above — all raw WMI
-    PascalCase field names) rather than normalizing it the way it does for
-    "volumes". "battery" is expected to follow that same pattern: a list
-    under windows.battery with one raw Win32_Battery WMI record per battery,
-    e.g. EstimatedChargeRemaining (uint16, %) and BatteryStatus (uint16,
-    1=Discharging, 2=OnAC/Idle, 3=FullyCharged, 4=Low, 5=Critical,
-    6-9=Charging variants, 11=PartiallyCharged) per Microsoft's WMI schema.
+    Confirmed live (see #25) — MeshCentral does NOT pass this through raw
+    from WMI like memory/osinfo/gpu do; it's its own normalized format:
 
-    NOTE: inferred from the codebase's consistent pattern and the public
-    Win32_Battery schema, not yet confirmed against a live getsysinfo
-    payload from a battery-equipped device — verify field names before
-    relying on this in production, and adjust here if MeshCentral's actual
-    payload differs.
+        "battery": [{
+            "InstanceName": "ACPI\\PNP0C0A\\0_0",
+            "CycleCount": 60,
+            "FullChargedCapacity": 60228,
+            "EstimatedRuntime": -1,
+            "Chemistry": "LIon",
+            "DesignedCapacity": 75998,
+            "DeviceName": "ASUS Battery",
+            "ManufactureName": "ASUSTeK",
+            "SerialNumber": " ",
+            "ChargeRate": 0,
+            "Charging": false,
+            "DischargeRate": 0,
+            "Discharging": true,
+            "RemainingCapacity": 48100,
+            "Voltage": 15833,
+            "Health": 79,
+            "BatteryCharge": 79
+        }]
+
+    "battery" is a list (multi-battery devices exist), but every device
+    seen so far only has one entry — only the first is used for now.
+    "BatteryCharge" is the charge percentage; "Health" is a separate
+    state-of-health percentage (not the same field, despite matching in
+    this particular sample). "Charging"/"Discharging" are plain booleans —
+    no status-code guessing needed.
     """
 
     _attr_name = "Battery"
@@ -421,21 +435,6 @@ class BatteryLevelSensor(_HwBase):
     _attr_device_class = SensorDeviceClass.BATTERY
     _attr_native_unit_of_measurement = PERCENTAGE
     _attr_state_class = SensorStateClass.MEASUREMENT
-
-    _CHARGING_STATUS_CODES = {6, 7, 8, 9}
-    _STATUS_LABELS = {
-        1: "discharging",
-        2: "idle",  # on AC, not charging (already full or no charge control)
-        3: "fully_charged",
-        4: "low",
-        5: "critical",
-        6: "charging",
-        7: "charging_high",
-        8: "charging_low",
-        9: "charging_critical",
-        10: "undefined",
-        11: "partially_charged",
-    }
 
     def __init__(self, coordinator, main, node_id):
         super().__init__(coordinator, main, node_id)
@@ -448,7 +447,7 @@ class BatteryLevelSensor(_HwBase):
 
     @property
     def native_value(self):
-        pct = self._battery.get("EstimatedChargeRemaining")
+        pct = self._battery.get("BatteryCharge")
         return int(pct) if pct is not None else None
 
     @property
@@ -457,13 +456,18 @@ class BatteryLevelSensor(_HwBase):
 
     @property
     def extra_state_attributes(self):
-        status_code = self._battery.get("BatteryStatus")
+        b = self._battery
         return {
-            "charging": status_code in self._CHARGING_STATUS_CODES,
-            "status": self._STATUS_LABELS.get(status_code, "unknown"),
-            "chemistry": self._battery.get("Chemistry"),
-            "design_capacity": self._battery.get("DesignCapacity"),
-            "full_charge_capacity": self._battery.get("FullChargeCapacity"),
+            "charging": b.get("Charging"),
+            "discharging": b.get("Discharging"),
+            "health_percent": b.get("Health"),
+            "chemistry": b.get("Chemistry"),
+            "cycle_count": b.get("CycleCount"),
+            "design_capacity": b.get("DesignedCapacity"),
+            "full_charge_capacity": b.get("FullChargedCapacity"),
+            "remaining_capacity": b.get("RemainingCapacity"),
+            "estimated_runtime_min": b.get("EstimatedRuntime"),
+            "device_name": b.get("DeviceName"),
         }
 
 

@@ -31,7 +31,7 @@ This document captures technical findings and gotchas discovered while building 
 - **WOL:** Use `wakedevices` action (not `poweraction` type 4). MeshCentral finds online agents on the same network and relays the magic packet
 - **Power:** `poweraction` with types: 1=sleep, 2=reboot, 3=shutdown, 5=hibernate
 - **Hardware info:** `getsysinfo` returns full hardware details including Windows volumes, RAM, GPU, BIOS
-- **`getsysinfo` field naming:** mostly raw WMI PascalCase pass-through (`windows.memory[].Capacity`, `windows.osinfo.NumberOfProcesses`, `windows.gpu[].CurrentHorizontalResolution`) — `windows.volumes` is the one exception with its own normalized lowercase keys (`size`, `sizeremaining`). Battery (`windows.battery[]`, added v0.5.0) is implemented assuming the same raw-WMI pattern (`EstimatedChargeRemaining`, `BatteryStatus` per `Win32_Battery`) but **not yet confirmed against a live payload from a battery-equipped device** — verify before relying on it
+- **`getsysinfo` field naming:** mostly raw WMI PascalCase pass-through (`windows.memory[].Capacity`, `windows.osinfo.NumberOfProcesses`, `windows.gpu[].CurrentHorizontalResolution`) — `windows.volumes` and `windows.battery[]` are both exceptions with their own normalized formats, not raw WMI. Battery confirmed live (#25): `BatteryCharge` (%), `Health` (a *separate* state-of-health %), `Charging`/`Discharging` (plain booleans, no status-code enum), `CycleCount`, `DesignedCapacity`/`FullChargedCapacity`/`RemainingCapacity`, `EstimatedRuntime`. It's a list — only the first entry is used, multi-battery devices not yet handled
 - **Real-time events:** `nodeconnect` events provide instant online/offline updates
 
 ### responseid field
