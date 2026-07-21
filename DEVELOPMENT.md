@@ -31,6 +31,7 @@ This document captures technical findings and gotchas discovered while building 
 - **WOL:** Use `wakedevices` action (not `poweraction` type 4). MeshCentral finds online agents on the same network and relays the magic packet
 - **Power:** `poweraction` with types: 1=sleep, 2=reboot, 3=shutdown, 5=hibernate
 - **Hardware info:** `getsysinfo` returns full hardware details including Windows volumes, RAM, GPU, BIOS
+- **`getsysinfo` field naming:** mostly raw WMI PascalCase pass-through (`windows.memory[].Capacity`, `windows.osinfo.NumberOfProcesses`, `windows.gpu[].CurrentHorizontalResolution`) — `windows.volumes` is the one exception with its own normalized lowercase keys (`size`, `sizeremaining`). Battery (`windows.battery[]`, added v0.5.0) is implemented assuming the same raw-WMI pattern (`EstimatedChargeRemaining`, `BatteryStatus` per `Win32_Battery`) but **not yet confirmed against a live payload from a battery-equipped device** — verify before relying on it
 - **Real-time events:** `nodeconnect` events provide instant online/offline updates
 
 ### responseid field
@@ -48,6 +49,8 @@ This document captures technical findings and gotchas discovered while building 
 
 ### Entities
 
+- **Hardware sensors offline fallback (v0.5.0):** the hardware coordinator used to build a fresh `{}` on every poll, only including devices that were online *at that exact poll* — so any device offline at HA startup, or that went offline mid-session, immediately showed `unavailable` with no fallback, even though MeshCentral's own Details tab still shows the last known values. Fixed two ways: (1) the coordinator now carries forward the previous poll's data instead of dropping offline devices, and (2) hardware sensor entities use `RestoreEntity`/`extra_restore_state_data` to persist the last known `getsysinfo` payload across HA restarts too. See `sensor_hardware.py::_HwBase`
+- **Entity creation must not depend on data that may not exist yet:** don't gate a sensor's *creation* (as opposed to its `native_value`/`available`) on `hw_coordinator.data` at platform-setup time — if the backing device happens to be offline during initial setup, the entity never gets created at all, not just marked unavailable. Always create the entity unconditionally and let `available` reflect missing data instead (see the disk-sensor "no sysinfo fetched yet" fallback and `BatteryLevelSensor` for the pattern)
 - **device_class: SAFETY** on binary sensors shows "Unsafe"/"Safe" instead of "On"/"Off" — omit device_class for security sensors where `True` = OK
 - **Unique ID prefix:** Always prefix unique IDs with `mc_` (e.g. `f"mc_{node_id}_online"`) to avoid collisions with other integrations like HASS.Agent that use the same device names
 

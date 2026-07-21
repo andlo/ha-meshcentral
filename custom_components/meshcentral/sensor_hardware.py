@@ -15,6 +15,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import PERCENTAGE, UnitOfInformation
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.restore_state import RestoreEntity, RestoredExtraData
 from homeassistant.helpers.update_coordinator import (
     CoordinatorEntity,
     DataUpdateCoordinator,
@@ -52,10 +53,14 @@ class HardwareDataCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._main = main
 
     async def _async_update_data(self) -> dict[str, Any]:
-        result = {}
+        # Start from the previous poll's data so devices that are offline
+        # right now (or that just went offline) keep showing their last
+        # known-good hardware data instead of flipping to unavailable —
+        # only a device that has *never* reported anything is missing here.
+        result = dict(self.data or {})
         for node_id, node in self._main.data.items():
             if node.get("conn", 0) != 1:
-                continue  # skip offline devices
+                continue  # skip offline devices — leave any previous entry as-is
             try:
                 hw = await self._main.client.get_sysinfo(node_id)
                 if hw:
@@ -104,6 +109,16 @@ async def async_setup_hardware_entities(
                 ProcessCountSensor(hw_coordinator, main, node_id),
                 ScreenResolutionSensor(hw_coordinator, main, node_id),
             ]
+            # Battery — created for every Windows device, same as the other
+            # hardware sensors. Gating creation on hw.get("battery") here
+            # would hit the exact bug from #24: if the device happens to be
+            # offline during initial setup there's no hw data yet, so the
+            # entity would never be created at all (not just unavailable).
+            # Desktops without a battery simply report unavailable, and
+            # this is disabled-by-default anyway. Charging state and health
+            # are exposed as attributes rather than a separate binary_sensor
+            # to keep everything on this one coordinator/platform.
+            entities.append(BatteryLevelSensor(hw_coordinator, main, node_id))
             win_volumes = hw.get("windows", {}).get("volumes", {})
             if win_volumes:
                 for drive_letter in win_volumes:
@@ -136,7 +151,7 @@ async def async_setup_hardware_entities(
     async_add_entities(entities)
 
 
-class _HwBase(CoordinatorEntity[HardwareDataCoordinator], SensorEntity):
+class _HwBase(CoordinatorEntity[HardwareDataCoordinator], SensorEntity, RestoreEntity):
     _attr_has_entity_name = True
     _attr_entity_registry_enabled_default = False  # disabled by default — "advanced"
 
@@ -149,10 +164,36 @@ class _HwBase(CoordinatorEntity[HardwareDataCoordinator], SensorEntity):
         super().__init__(coordinator)
         self._node_id = node_id
         self._main = main
+        self._restored_hw: dict | None = None
+
+    async def async_added_to_hass(self) -> None:
+        """Restore the last known getsysinfo payload across HA restarts.
+
+        The hardware coordinator only ever holds data for devices that were
+        online during this HA run. If a device is offline when HA (re)starts,
+        coordinator.data has nothing for it yet — without this, every
+        hardware sensor would sit at `unavailable` until the device happens
+        to come online, even though MeshCentral itself still reports the
+        last known values on its own Details tab.
+        """
+        await super().async_added_to_hass()
+        if not self.coordinator.data.get(self._node_id):
+            last_extra_data = await self.async_get_last_extra_data()
+            if last_extra_data is not None:
+                self._restored_hw = last_extra_data.as_dict()
+
+    @property
+    def extra_restore_state_data(self) -> RestoredExtraData | None:
+        """Persist whichever hw dict is currently backing this entity."""
+        hw = self._hw
+        return RestoredExtraData(hw) if hw else None
 
     @property
     def _hw(self) -> dict:
-        return self.coordinator.data.get(self._node_id, {})
+        live = self.coordinator.data.get(self._node_id)
+        if live:
+            return live
+        return self._restored_hw or {}
 
     @property
     def _win(self) -> dict:
@@ -353,6 +394,77 @@ class WindowsDiskFreePercentSensor(_HwBase):
         if size and free:
             return round(free / size * 100, 1)
         return None
+
+
+class BatteryLevelSensor(_HwBase):
+    """Battery charge level for laptops.
+
+    MeshCentral's getsysinfo passes most Windows hardware data straight
+    through from WMI (see RamTotalSensor's Capacity/osinfo's
+    NumberOfProcesses/gpu's CurrentHorizontalResolution above — all raw WMI
+    PascalCase field names) rather than normalizing it the way it does for
+    "volumes". "battery" is expected to follow that same pattern: a list
+    under windows.battery with one raw Win32_Battery WMI record per battery,
+    e.g. EstimatedChargeRemaining (uint16, %) and BatteryStatus (uint16,
+    1=Discharging, 2=OnAC/Idle, 3=FullyCharged, 4=Low, 5=Critical,
+    6-9=Charging variants, 11=PartiallyCharged) per Microsoft's WMI schema.
+
+    NOTE: inferred from the codebase's consistent pattern and the public
+    Win32_Battery schema, not yet confirmed against a live getsysinfo
+    payload from a battery-equipped device — verify field names before
+    relying on this in production, and adjust here if MeshCentral's actual
+    payload differs.
+    """
+
+    _attr_name = "Battery"
+    _attr_icon = "mdi:battery"
+    _attr_device_class = SensorDeviceClass.BATTERY
+    _attr_native_unit_of_measurement = PERCENTAGE
+    _attr_state_class = SensorStateClass.MEASUREMENT
+
+    _CHARGING_STATUS_CODES = {6, 7, 8, 9}
+    _STATUS_LABELS = {
+        1: "discharging",
+        2: "idle",  # on AC, not charging (already full or no charge control)
+        3: "fully_charged",
+        4: "low",
+        5: "critical",
+        6: "charging",
+        7: "charging_high",
+        8: "charging_low",
+        9: "charging_critical",
+        10: "undefined",
+        11: "partially_charged",
+    }
+
+    def __init__(self, coordinator, main, node_id):
+        super().__init__(coordinator, main, node_id)
+        self._attr_unique_id = f"mc_{node_id}_hw_battery"
+
+    @property
+    def _battery(self) -> dict:
+        batteries = self._win.get("battery", [])
+        return batteries[0] if batteries else {}
+
+    @property
+    def native_value(self):
+        pct = self._battery.get("EstimatedChargeRemaining")
+        return int(pct) if pct is not None else None
+
+    @property
+    def available(self) -> bool:
+        return bool(self._battery)
+
+    @property
+    def extra_state_attributes(self):
+        status_code = self._battery.get("BatteryStatus")
+        return {
+            "charging": status_code in self._CHARGING_STATUS_CODES,
+            "status": self._STATUS_LABELS.get(status_code, "unknown"),
+            "chemistry": self._battery.get("Chemistry"),
+            "design_capacity": self._battery.get("DesignCapacity"),
+            "full_charge_capacity": self._battery.get("FullChargeCapacity"),
+        }
 
 
 class ProcessCountSensor(_HwBase):
