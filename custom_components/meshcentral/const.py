@@ -27,14 +27,21 @@ ATTR_LAST_CONNECT = "last_connect"
 ATTR_POWER_STATE = "power_state"
 
 # Mapping of MeshCentral's numeric "pwr" node field to a human-readable state.
-# See: https://github.com/Ylianst/MeshCentral (nodeconnect / node "pwr" field)
+# Confirmed against meshcentral.js's powerState doc comment (next to
+# SetConnectivityState): 0=Unknown, 1=S0 power on, 2=S1 Sleep, 3=S2 Sleep,
+# 4=S3 Sleep, 5=S4 Hibernate, 6=S5 Soft-Off, 7=Present, 8=Off (#27 — the
+# previous mapping only had 6 entries and most of them were wrong).
+# 0 is intentionally omitted — it means "Unknown", same as an absent/None
+# "pwr" field, so it falls through to POWER_STATE_UNKNOWN below either way.
 POWER_STATE_MAP = {
-    0: "off",
     1: "on",
-    2: "sleep",
-    3: "hibernate",
-    4: "soft_off",
-    5: "cycle",
+    2: "sleep",        # ACPI S1
+    3: "sleep",        # ACPI S2 — MeshCentral's own UI also just shows "Sleep" for this
+    4: "deep_sleep",   # ACPI S3
+    5: "hibernate",    # ACPI S4
+    6: "soft_off",     # ACPI S5
+    7: "present",
+    8: "off",
 }
 POWER_STATE_UNKNOWN = "unknown"
 
