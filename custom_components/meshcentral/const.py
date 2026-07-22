@@ -37,3 +37,27 @@ POWER_STATE_MAP = {
     5: "cycle",
 }
 POWER_STATE_UNKNOWN = "unknown"
+
+# Mapping of MeshCentral's numeric "conn" node field. It's a BITMASK, not an
+# enum — a device can be connected via more than one channel at once (e.g.
+# agent + CIRA), so callers must use bitwise AND (conn & CONN_AGENT), never
+# equality (conn == CONN_AGENT). Values confirmed against meshcentral.js,
+# SetConnectivityState()'s "connectType" doc comment.
+CONN_AGENT = 1
+CONN_CIRA = 2
+CONN_AMT_LOCAL = 4
+CONN_AMT_RELAY = 8
+CONN_MQTT = 16
+
+CONN_TYPE_LABELS = {
+    CONN_AGENT: "agent",
+    CONN_CIRA: "cira",
+    CONN_AMT_LOCAL: "amt_local",
+    CONN_AMT_RELAY: "amt_relay",
+    CONN_MQTT: "mqtt",
+}
+
+
+def conn_type_list(conn: int) -> list[str]:
+    """Decode a conn bitmask into a list of human-readable connection types."""
+    return [label for bit, label in CONN_TYPE_LABELS.items() if conn & bit]

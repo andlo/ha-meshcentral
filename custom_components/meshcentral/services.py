@@ -8,7 +8,7 @@ from homeassistant.core import HomeAssistant, ServiceCall, ServiceResponse, Supp
 from homeassistant.helpers import config_validation as cv
 from homeassistant.components.persistent_notification import async_create as async_create_notification
 
-from .const import DOMAIN
+from .const import CONN_AGENT, DOMAIN
 from .coordinator import MeshCentralCoordinator
 
 _LOGGER = logging.getLogger(__name__)
@@ -44,7 +44,11 @@ def async_register_services(hass: HomeAssistant) -> None:
         node = coordinator.data.get(node_id, {})
         device_name = node.get("name", device_id)
 
-        if node.get("conn", 0) != 1:
+        # run_command needs the agent specifically — "conn" is a bitmask,
+        # so check the agent bit rather than requiring conn == 1 exactly
+        # (a device also connected via CIRA/AMT alongside the agent was
+        # being wrongly treated as offline here) (#26).
+        if not (node.get("conn", 0) & CONN_AGENT):
             _LOGGER.warning("run_command: device '%s' is offline, command not sent", device_name)
             return {"success": False, "device": device_name, "command": command, "output": None}
 

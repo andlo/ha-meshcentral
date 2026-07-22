@@ -9,7 +9,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import DOMAIN
+from .const import CONN_AGENT, DOMAIN
 from .coordinator import MeshCentralCoordinator
 
 _LOGGER = logging.getLogger(__name__)
@@ -47,7 +47,11 @@ class MeshCentralDeviceTracker(
 
     @property
     def is_connected(self) -> bool:
-        return self._node.get("conn", 0) == 1
+        # "conn" is a bitmask — check the agent bit specifically (this
+        # tracker is documented as agent-based), don't require conn == 1
+        # exactly, or a device also connected via CIRA/AMT alongside the
+        # agent (conn == 3, 5, ...) would wrongly show as not_home (#26).
+        return bool(self._node.get("conn", 0) & CONN_AGENT)
 
     @property
     def latitude(self) -> float | None:

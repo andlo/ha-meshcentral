@@ -22,7 +22,7 @@ from homeassistant.helpers.update_coordinator import (
     UpdateFailed,
 )
 
-from .const import CONF_HW_SCAN_INTERVAL, DEFAULT_HW_SCAN_INTERVAL, DOMAIN
+from .const import CONF_HW_SCAN_INTERVAL, CONN_AGENT, DEFAULT_HW_SCAN_INTERVAL, DOMAIN
 from .coordinator import MeshCentralCoordinator
 
 _LOGGER = logging.getLogger(__name__)
@@ -59,8 +59,14 @@ class HardwareDataCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         # only a device that has *never* reported anything is missing here.
         result = dict(self.data or {})
         for node_id, node in self._main.data.items():
-            if node.get("conn", 0) != 1:
-                continue  # skip offline devices — leave any previous entry as-is
+            # "conn" is a bitmask — getsysinfo needs the agent specifically
+            # (it's not available over CIRA/AMT-only connections), so check
+            # the agent bit rather than requiring conn == 1 exactly. A
+            # device connected via agent+CIRA (conn == 3) was being skipped
+            # here before this fix, going stale until it dropped to
+            # agent-only (#26).
+            if not (node.get("conn", 0) & CONN_AGENT):
+                continue  # skip devices without an active agent connection — leave any previous entry as-is
             try:
                 hw = await self._main.client.get_sysinfo(node_id)
                 if hw:
