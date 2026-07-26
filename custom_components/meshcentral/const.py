@@ -27,13 +27,44 @@ ATTR_LAST_CONNECT = "last_connect"
 ATTR_POWER_STATE = "power_state"
 
 # Mapping of MeshCentral's numeric "pwr" node field to a human-readable state.
-# See: https://github.com/Ylianst/MeshCentral (nodeconnect / node "pwr" field)
+# Confirmed against meshcentral.js's powerState doc comment (next to
+# SetConnectivityState): 0=Unknown, 1=S0 power on, 2=S1 Sleep, 3=S2 Sleep,
+# 4=S3 Sleep, 5=S4 Hibernate, 6=S5 Soft-Off, 7=Present, 8=Off (#27 — the
+# previous mapping only had 6 entries and most of them were wrong).
+# 0 is intentionally omitted — it means "Unknown", same as an absent/None
+# "pwr" field, so it falls through to POWER_STATE_UNKNOWN below either way.
 POWER_STATE_MAP = {
-    0: "off",
     1: "on",
-    2: "sleep",
-    3: "hibernate",
-    4: "soft_off",
-    5: "cycle",
+    2: "sleep",        # ACPI S1
+    3: "sleep",        # ACPI S2 — MeshCentral's own UI also just shows "Sleep" for this
+    4: "deep_sleep",   # ACPI S3
+    5: "hibernate",    # ACPI S4
+    6: "soft_off",     # ACPI S5
+    7: "present",
+    8: "off",
 }
 POWER_STATE_UNKNOWN = "unknown"
+
+# Mapping of MeshCentral's numeric "conn" node field. It's a BITMASK, not an
+# enum — a device can be connected via more than one channel at once (e.g.
+# agent + CIRA), so callers must use bitwise AND (conn & CONN_AGENT), never
+# equality (conn == CONN_AGENT). Values confirmed against meshcentral.js,
+# SetConnectivityState()'s "connectType" doc comment.
+CONN_AGENT = 1
+CONN_CIRA = 2
+CONN_AMT_LOCAL = 4
+CONN_AMT_RELAY = 8
+CONN_MQTT = 16
+
+CONN_TYPE_LABELS = {
+    CONN_AGENT: "agent",
+    CONN_CIRA: "cira",
+    CONN_AMT_LOCAL: "amt_local",
+    CONN_AMT_RELAY: "amt_relay",
+    CONN_MQTT: "mqtt",
+}
+
+
+def conn_type_list(conn: int) -> list[str]:
+    """Decode a conn bitmask into a list of human-readable connection types."""
+    return [label for bit, label in CONN_TYPE_LABELS.items() if conn & bit]

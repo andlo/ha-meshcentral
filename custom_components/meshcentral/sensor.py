@@ -180,7 +180,7 @@ class MeshCentralAgentLastSeenSensor(_Base):
 
 
 class MeshCentralPowerStateSensor(_Base):
-    """Power state (on/off/sleep/hibernate/soft-off/cycle) for a device.
+    """Power state (on/sleep/deep_sleep/hibernate/soft_off/present/off) for a device.
 
     MeshCentral reports this via the numeric "pwr" field on the node and in
     "nodeconnect" WebSocket events. See const.POWER_STATE_MAP for the mapping.
@@ -189,7 +189,10 @@ class MeshCentralPowerStateSensor(_Base):
     _attr_name = "Power State"
     _attr_icon = "mdi:power-settings"
     _attr_device_class = SensorDeviceClass.ENUM
-    _attr_options = list(POWER_STATE_MAP.values()) + [POWER_STATE_UNKNOWN]
+    # dict.fromkeys(...) dedupes while preserving order — POWER_STATE_MAP
+    # maps two different pwr codes (ACPI S1 and S2) to the same "sleep"
+    # label, so a plain list() here would give ENUM a duplicate option.
+    _attr_options = list(dict.fromkeys(POWER_STATE_MAP.values())) + [POWER_STATE_UNKNOWN]
 
     def __init__(self, coordinator, node_id):
         super().__init__(coordinator, node_id)

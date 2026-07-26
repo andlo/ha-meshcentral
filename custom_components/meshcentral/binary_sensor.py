@@ -10,7 +10,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import DOMAIN
+from .const import CONN_AGENT, DOMAIN, conn_type_list
 from .coordinator import MeshCentralCoordinator
 
 
@@ -64,14 +64,20 @@ class MeshCentralOnlineSensor(_Base):
 
     @property
     def is_on(self):
-        return self._node.get("conn", 0) == 1
+        # "conn" is a bitmask (see const.py) — a device counts as online if
+        # ANY connection channel is up, not just when it equals exactly 1.
+        # A device connected via agent+CIRA (conn == 3) was being reported
+        # as offline before this fix (#26).
+        return self._node.get("conn", 0) != 0
 
     @property
     def extra_state_attributes(self):
         node = self._node
+        conn = node.get("conn", 0)
         return {
             "ip": node.get("ip"),
             "mesh_id": node.get("_meshid"),
+            "connection_types": conn_type_list(conn),
         }
 
 

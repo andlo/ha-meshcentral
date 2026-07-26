@@ -73,6 +73,21 @@ class MeshCentralCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         data = {d["_id"]: d for d in devices if "_id" in d}
 
+        # client.get_devices() fails "soft" (returns []) rather than raising
+        # when MeshCentral doesn't answer in time — typically because the
+        # session cookie went stale (e.g. right after a MeshCentral server
+        # restart). Getting 0 devices when we previously had some is almost
+        # certainly a dead session, not the user suddenly having no devices.
+        # Treat it as a failure so HA marks entities unavailable and we
+        # retry with a fresh login, instead of silently wiping good data
+        # with an empty result (#29).
+        if not data and self.data:
+            self._logged_in = False
+            raise UpdateFailed(
+                "MeshCentral returned no devices (likely a stale session after "
+                "a server restart) — forcing re-login and retrying"
+            )
+
         # Start real-time listener as background task — don't await it
         if self._event_task is None or self._event_task.done():
             self._event_task = self.hass.loop.create_task(
@@ -117,7 +132,8 @@ class MeshCentralCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             headers=headers,
             timeout=aiohttp.ClientTimeout(total=None),  # keep-alive forever
         ) as ws:
-            _LOGGER.debug("MeshCentral event WS connected")
+            opened = asyncio.get_event_loop().time()
+            _LOGGER.debug("MeshCentral event WS connected (persistent control.ashx)")
             await self._refresh_after_reconnect()
             while True:
                 msg = await ws.receive()
@@ -127,7 +143,11 @@ class MeshCentralCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     aiohttp.WSMsgType.CLOSED,
                     aiohttp.WSMsgType.ERROR,
                 ):
-                    _LOGGER.debug("MeshCentral event WS closed, reconnecting")
+                    _LOGGER.debug(
+                        "MeshCentral event WS closed (%s) after %.2fs open, reconnecting",
+                        msg.type.name,
+                        asyncio.get_event_loop().time() - opened,
+                    )
                     break
 
     async def _refresh_after_reconnect(self) -> None:
@@ -143,9 +163,24 @@ class MeshCentralCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             devices = await self.client.get_devices()
         except Exception as err:
             _LOGGER.warning("MeshCentral post-reconnect poll failed: %s", err)
+            self._logged_in = False
             return
 
         data = {d["_id"]: d for d in devices if "_id" in d}
+
+        # Same stale-session guard as _async_update_data (#29): an empty
+        # result here after previously having devices means the reconnect
+        # went through on a dead session. Don't overwrite good data with
+        # it — force a fresh login on the next reconnect attempt instead.
+        if not data and self.data:
+            _LOGGER.warning(
+                "MeshCentral post-reconnect poll got 0 devices (had %d) — "
+                "likely a stale session, forcing re-login",
+                len(self.data),
+            )
+            self._logged_in = False
+            return
+
         if data:
             self.async_set_updated_data(data)
             _LOGGER.debug(

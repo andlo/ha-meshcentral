@@ -98,7 +98,9 @@ class MeshCentralDevicesOnlineSensor(_MainCoordinatorBase):
 
     @property
     def native_value(self):
-        return sum(1 for n in self._main.data.values() if n.get("conn", 0) == 1)
+        # Matches the per-device "Online" binary_sensor: any connectivity
+        # counts (conn is a bitmask, not conn == 1) — see binary_sensor.py.
+        return sum(1 for n in self._main.data.values() if n.get("conn", 0) != 0)
 
 
 class MeshCentralDevicesOfflineSensor(_MainCoordinatorBase):
@@ -111,7 +113,7 @@ class MeshCentralDevicesOfflineSensor(_MainCoordinatorBase):
 
     @property
     def native_value(self):
-        return sum(1 for n in self._main.data.values() if n.get("conn", 0) != 1)
+        return sum(1 for n in self._main.data.values() if n.get("conn", 0) == 0)
 
 
 class MeshCentralDevicesTotalSensor(_MainCoordinatorBase):

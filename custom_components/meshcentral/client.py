@@ -124,6 +124,9 @@ class MeshCentralClient:
         session = await self._get_session()
         ssl_ctx = self._ssl_context()
         headers = {"Cookie": self._cookie} if self._cookie else {}
+        action = payload.get("action", "?")
+        opened = time.monotonic()
+        _LOGGER.debug("_send_recv: opening control.ashx WS for action=%s", action)
         try:
             async with session.ws_connect(
                 self.ws_url,
@@ -141,14 +144,36 @@ class MeshCentralClient:
                     if msg.type == aiohttp.WSMsgType.TEXT:
                         data = json.loads(msg.data)
                         if data.get("action") == response_action:
+                            _LOGGER.debug(
+                                "_send_recv: action=%s got response in %.2fs",
+                                action,
+                                time.monotonic() - opened,
+                            )
                             return data
                     elif msg.type in (
                         aiohttp.WSMsgType.CLOSED,
                         aiohttp.WSMsgType.ERROR,
                     ):
+                        _LOGGER.debug(
+                            "_send_recv: action=%s socket %s after %.2fs, no response",
+                            action,
+                            msg.type.name,
+                            time.monotonic() - opened,
+                        )
                         break
+                else:
+                    _LOGGER.debug(
+                        "_send_recv: action=%s timed out after %.2fs waiting for response",
+                        action,
+                        time.monotonic() - opened,
+                    )
         except Exception as err:
-            _LOGGER.error("WebSocket error: %s", err)
+            _LOGGER.error(
+                "_send_recv: action=%s WebSocket error after %.2fs: %s",
+                action,
+                time.monotonic() - opened,
+                err,
+            )
         return None
 
     async def get_devices(self) -> list[dict]:
