@@ -132,7 +132,8 @@ class MeshCentralCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             headers=headers,
             timeout=aiohttp.ClientTimeout(total=None),  # keep-alive forever
         ) as ws:
-            _LOGGER.debug("MeshCentral event WS connected")
+            opened = asyncio.get_event_loop().time()
+            _LOGGER.debug("MeshCentral event WS connected (persistent control.ashx)")
             await self._refresh_after_reconnect()
             while True:
                 msg = await ws.receive()
@@ -142,7 +143,11 @@ class MeshCentralCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     aiohttp.WSMsgType.CLOSED,
                     aiohttp.WSMsgType.ERROR,
                 ):
-                    _LOGGER.debug("MeshCentral event WS closed, reconnecting")
+                    _LOGGER.debug(
+                        "MeshCentral event WS closed (%s) after %.2fs open, reconnecting",
+                        msg.type.name,
+                        asyncio.get_event_loop().time() - opened,
+                    )
                     break
 
     async def _refresh_after_reconnect(self) -> None:
