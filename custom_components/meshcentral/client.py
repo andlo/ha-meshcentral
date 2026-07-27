@@ -52,6 +52,7 @@ class MeshCentralClient:
         self._login_key = login_key or None
         self._session: aiohttp.ClientSession | None = None
         self._cookie: str | None = None
+        self._ssl_ctx_cache: ssl.SSLContext | None = None
 
     @property
     def _key_param(self) -> str:
@@ -71,14 +72,25 @@ class MeshCentralClient:
         scheme = "wss" if self._use_ssl else "ws"
         return f"{scheme}://{self._host}:{self._port}{WS_CONTROL_PATH}{self._key_param}"
 
-    def _ssl_context(self) -> ssl.SSLContext | bool:
+    async def _ssl_context(self) -> ssl.SSLContext | bool:
+        """Return the SSL context for requests, built off the event loop.
+
+        ssl.create_default_context() does blocking disk I/O (loading the
+        system's default CA certs), so it must not be called directly on
+        the event loop — HA's blocking-call detector flags this, and on
+        a busy instance it can stall/interfere with time-sensitive login
+        and WebSocket request/response cycles. Built once and cached.
+        """
         if not self._use_ssl:
             return False
         if not self._verify_ssl:
-            ctx = ssl.create_default_context()
-            ctx.check_hostname = False
-            ctx.verify_mode = ssl.CERT_NONE
-            return ctx
+            if self._ssl_ctx_cache is None:
+                loop = asyncio.get_event_loop()
+                ctx = await loop.run_in_executor(None, ssl.create_default_context)
+                ctx.check_hostname = False
+                ctx.verify_mode = ssl.CERT_NONE
+                self._ssl_ctx_cache = ctx
+            return self._ssl_ctx_cache
         return True
 
     async def _get_session(self) -> aiohttp.ClientSession:
@@ -89,7 +101,7 @@ class MeshCentralClient:
     async def login(self) -> bool:
         """Authenticate with MeshCentral and store session cookie."""
         session = await self._get_session()
-        ssl_ctx = self._ssl_context()
+        ssl_ctx = await self._ssl_context()
         login_url = f"{self.base_url}/login{self._key_param}"
         payload = {"username": self._username, "password": self._password}
         _LOGGER.debug("Logging in to MeshCentral at %s", login_url)
@@ -122,7 +134,7 @@ class MeshCentralClient:
     async def _send_recv(self, payload: dict, response_action: str) -> Any:
         """Open a WebSocket, send a command, and return the matching response."""
         session = await self._get_session()
-        ssl_ctx = self._ssl_context()
+        ssl_ctx = await self._ssl_context()
         headers = {"Cookie": self._cookie} if self._cookie else {}
         action = payload.get("action", "?")
         opened = time.monotonic()
