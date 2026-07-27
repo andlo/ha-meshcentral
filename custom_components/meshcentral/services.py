@@ -21,6 +21,8 @@ SERVICE_RUN_COMMAND_SCHEMA = vol.Schema(
         vol.Required("device_id"): cv.string,
         vol.Required("command"): cv.string,
         vol.Optional("run_as_user", default=False): cv.boolean,
+        vol.Optional("wait_for_output", default=True): cv.boolean,
+        vol.Optional("powershell", default=False): cv.boolean,
         vol.Optional("notify", default=False): cv.boolean,
     }
 )
@@ -33,6 +35,8 @@ def async_register_services(hass: HomeAssistant) -> None:
         device_id = call.data["device_id"]
         command = call.data["command"]
         run_as_user = call.data.get("run_as_user", False)
+        wait_for_output = call.data.get("wait_for_output", True)
+        powershell = call.data.get("powershell", False)
         notify = call.data.get("notify", False)
 
         # Find coordinator and node_id from device_id
@@ -41,18 +45,23 @@ def async_register_services(hass: HomeAssistant) -> None:
             _LOGGER.error("run_command: device '%s' not found in MeshCentral", device_id)
             return {"success": False, "device": device_id, "command": command, "output": None}
 
-        node = coordinator.data.get(node_id, {})
-        device_name = node.get("name", device_id)
+        # A complete raw node ID can be used even before device discovery has
+        # populated the local cache. Only enforce the cached agent check when
+        # the node is present in coordinator data.
+        node = (coordinator.data or {}).get(node_id)
+        device_name = node.get("name", device_id) if node else device_id
 
-        # run_command needs the agent specifically — "conn" is a bitmask,
-        # so check the agent bit rather than requiring conn == 1 exactly
-        # (a device also connected via CIRA/AMT alongside the agent was
-        # being wrongly treated as offline here) (#26).
-        if not (node.get("conn", 0) & CONN_AGENT):
+        if node is not None and not (node.get("conn", 0) & CONN_AGENT):
             _LOGGER.warning("run_command: device '%s' is offline, command not sent", device_name)
             return {"success": False, "device": device_name, "command": command, "output": None}
 
-        result = await coordinator.client.run_command(node_id, command, run_as_user)
+        result = await coordinator.client.run_command(
+            node_id,
+            command,
+            run_as_user,
+            wait_for_output,
+            powershell,
+        )
         success = result is not None
 
         if success:
@@ -68,6 +77,9 @@ def async_register_services(hass: HomeAssistant) -> None:
                 "device_id": node_id,
                 "device_name": device_name,
                 "command": command,
+                "run_as_user": run_as_user,
+                "wait_for_output": wait_for_output,
+                "powershell": powershell,
                 "success": success,
                 "output": result,
             },
@@ -93,13 +105,23 @@ def async_register_services(hass: HomeAssistant) -> None:
 
 
 def _find_node(hass: HomeAssistant, device_id: str):
-    """Find coordinator + node_id for a given device name or node_id."""
-    for key, value in hass.data.get(DOMAIN, {}).items():
+    """Find a coordinator and node ID by exact ID or device name."""
+    coordinators: list[MeshCentralCoordinator] = []
+
+    for value in hass.data.get(DOMAIN, {}).values():
         if not isinstance(value, MeshCentralCoordinator):
             continue
+
         coordinator: MeshCentralCoordinator = value
-        # Match by node_id or device name
-        for node_id, node in coordinator.data.items():
-            if node_id == device_id or node.get("name", "").lower() == device_id.lower():
+        coordinators.append(coordinator)
+        for node_id, node in (coordinator.data or {}).items():
+            if node_id == device_id:
                 return coordinator, node_id
+            if node.get("name", "").casefold() == device_id.casefold():
+                return coordinator, node_id
+
+    # A full node ID is unambiguous when exactly one MeshCentral server exists.
+    if device_id.startswith("node/") and len(coordinators) == 1:
+        return coordinators[0], device_id
+
     return None, None
