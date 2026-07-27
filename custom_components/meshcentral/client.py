@@ -304,8 +304,9 @@ class MeshCentralClient:
         result = await self._send_recv(
             {
                 "action": "runcommands",
-                "nodeid": node_id,
-                "type": 1 if run_as_user else 0,
+                "nodeids": [node_id],
+                "type": 0,
+                "runAsUser": 2 if run_as_user else 0,
                 "cmds": command,
                 "responseid": f"ha-cmd-{node_id[:8]}",
             },
