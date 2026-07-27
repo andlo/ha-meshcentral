@@ -217,6 +217,71 @@ class MeshCentralClient:
             return []
         return result.get("users", [])
 
+    async def get_installed_server_version(self) -> str | None:
+        """Read the installed MeshCentral version from serverconsole info."""
+        session = await self._get_session()
+        ssl_ctx = self._ssl_context()
+        headers = {"Cookie": self._cookie} if self._cookie else {}
+        tag = f"ha-server-info-{time.monotonic_ns()}"
+        try:
+            async with session.ws_connect(
+                self.ws_url,
+                ssl=ssl_ctx,
+                headers=headers,
+                timeout=aiohttp.ClientTimeout(total=8),
+            ) as ws:
+                await ws.send_str(
+                    json.dumps(
+                        {
+                            "action": "serverconsole",
+                            "value": "info",
+                            "tag": tag,
+                        }
+                    )
+                )
+                deadline = time.monotonic() + 8
+                while time.monotonic() < deadline:
+                    try:
+                        msg = await asyncio.wait_for(ws.receive(), timeout=2)
+                    except asyncio.TimeoutError:
+                        continue
+
+                    if msg.type == aiohttp.WSMsgType.TEXT:
+                        try:
+                            data = json.loads(msg.data)
+                        except (TypeError, json.JSONDecodeError):
+                            continue
+                        if (
+                            data.get("action") != "serverconsole"
+                            or data.get("tag") != tag
+                        ):
+                            continue
+
+                        value = data.get("value")
+                        if not isinstance(value, str):
+                            return None
+                        try:
+                            info = json.loads(value)
+                        except json.JSONDecodeError:
+                            return None
+                        version = info.get("meshVersion")
+                        if not isinstance(version, str) or not version:
+                            return None
+                        return (
+                            version[1:]
+                            if version.lower().startswith("v")
+                            else version
+                        )
+
+                    if msg.type in (
+                        aiohttp.WSMsgType.CLOSED,
+                        aiohttp.WSMsgType.ERROR,
+                    ):
+                        break
+        except Exception as err:
+            _LOGGER.debug("MeshCentral serverconsole info failed: %s", err)
+        return None
+
     async def get_server_version_tags(self) -> dict | None:
         """Return the server's own version info, if this session is allowed to.
 
