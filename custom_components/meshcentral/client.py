@@ -75,7 +75,9 @@ class MeshCentralClient:
         if not self._use_ssl:
             return False
         if not self._verify_ssl:
-            ctx = ssl.create_default_context()
+            # Avoid loading the system CA store in Home Assistant's event loop.
+            # No CA certificates are needed when verification is disabled.
+            ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
             ctx.check_hostname = False
             ctx.verify_mode = ssl.CERT_NONE
             return ctx
