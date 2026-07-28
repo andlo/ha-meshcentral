@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 
 from homeassistant.components.sensor import SensorDeviceClass, SensorEntity
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
@@ -22,21 +22,36 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     coordinator: MeshCentralCoordinator = hass.data[DOMAIN][entry.entry_id]
+    known_node_ids: set[str] = set()
 
-    # Basic sensors
-    entities = []
-    for node_id in coordinator.data:
-        entities += [
-            MeshCentralOsSensor(coordinator, node_id),
-            MeshCentralIpSensor(coordinator, node_id),
-            MeshCentralLastBootSensor(coordinator, node_id),
-            MeshCentralIdleTimeSensor(coordinator, node_id),
-            MeshCentralUsersSensor(coordinator, node_id),
-            MeshCentralDescSensor(coordinator, node_id),
-            MeshCentralAgentLastSeenSensor(coordinator, node_id),
-            MeshCentralPowerStateSensor(coordinator, node_id),
+    @callback
+    def _async_add_new_device_entities() -> None:
+        data = coordinator.data or {}
+        new_node_ids = [
+            node_id for node_id in data if node_id not in known_node_ids
         ]
-    async_add_entities(entities)
+        if not new_node_ids:
+            return
+
+        known_node_ids.update(new_node_ids)
+        entities = []
+        for node_id in new_node_ids:
+            entities += [
+                MeshCentralOsSensor(coordinator, node_id),
+                MeshCentralIpSensor(coordinator, node_id),
+                MeshCentralLastBootSensor(coordinator, node_id),
+                MeshCentralIdleTimeSensor(coordinator, node_id),
+                MeshCentralUsersSensor(coordinator, node_id),
+                MeshCentralDescSensor(coordinator, node_id),
+                MeshCentralAgentLastSeenSensor(coordinator, node_id),
+                MeshCentralPowerStateSensor(coordinator, node_id),
+            ]
+        async_add_entities(entities)
+
+    _async_add_new_device_entities()
+    entry.async_on_unload(
+        coordinator.async_add_listener(_async_add_new_device_entities)
+    )
 
     # Hardware detail sensors (disabled by default, fetched separately)
     hw_coordinator = HardwareDataCoordinator(hass, coordinator)

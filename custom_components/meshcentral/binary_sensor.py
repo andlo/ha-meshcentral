@@ -6,7 +6,7 @@ from homeassistant.components.binary_sensor import (
     BinarySensorEntity,
 )
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
@@ -20,15 +20,32 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     coordinator: MeshCentralCoordinator = hass.data[DOMAIN][entry.entry_id]
-    entities = []
-    for node_id in coordinator.data:
-        entities += [
-            MeshCentralOnlineSensor(coordinator, node_id),
-            MeshCentralAntivirusSensor(coordinator, node_id),
-            MeshCentralFirewallSensor(coordinator, node_id),
-            MeshCentralDefenderSensor(coordinator, node_id),
+    known_node_ids: set[str] = set()
+
+    @callback
+    def _async_add_new_device_entities() -> None:
+        data = coordinator.data or {}
+        new_node_ids = [
+            node_id for node_id in data if node_id not in known_node_ids
         ]
-    async_add_entities(entities)
+        if not new_node_ids:
+            return
+
+        known_node_ids.update(new_node_ids)
+        entities = []
+        for node_id in new_node_ids:
+            entities += [
+                MeshCentralOnlineSensor(coordinator, node_id),
+                MeshCentralAntivirusSensor(coordinator, node_id),
+                MeshCentralFirewallSensor(coordinator, node_id),
+                MeshCentralDefenderSensor(coordinator, node_id),
+            ]
+        async_add_entities(entities)
+
+    _async_add_new_device_entities()
+    entry.async_on_unload(
+        coordinator.async_add_listener(_async_add_new_device_entities)
+    )
 
 
 class _Base(CoordinatorEntity[MeshCentralCoordinator], BinarySensorEntity):
