@@ -73,14 +73,12 @@ class MeshCentralCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         data = {d["_id"]: d for d in devices if "_id" in d}
 
-        # client.get_devices() fails "soft" (returns []) rather than raising
-        # when MeshCentral doesn't answer in time — typically because the
-        # session cookie went stale (e.g. right after a MeshCentral server
-        # restart). Getting 0 devices when we previously had some is almost
-        # certainly a dead session, not the user suddenly having no devices.
-        # Treat it as a failure so HA marks entities unavailable and we
-        # retry with a fresh login, instead of silently wiping good data
-        # with an empty result (#29).
+        # client.get_devices() now raises on a failed/timed-out request
+        # (see #30) rather than returning [], so the except above already
+        # catches that case. This is defense-in-depth for the separate
+        # edge case where the request genuinely succeeds but reports 0
+        # devices after we previously had some — treat that as suspect
+        # too rather than trusting it outright (#29).
         if not data and self.data:
             self._logged_in = False
             raise UpdateFailed(

@@ -200,7 +200,13 @@ class MeshCentralClient:
             "nodes",
         )
         if result is None:
-            return []
+            # Distinguish "request failed" from "genuinely zero devices" —
+            # returning [] here would let a failed/timed-out request look
+            # identical to an empty account, which on first load (before
+            # the coordinator has any prior data to compare against) was
+            # silently accepted as valid and left every derived sensor
+            # confidently showing 0 instead of unavailable (#30).
+            raise TimeoutError("MeshCentral did not respond to the 'nodes' request")
         devices = []
         for mesh_id, node_list in result.get("nodes", {}).items():
             for node in node_list:
