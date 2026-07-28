@@ -83,10 +83,6 @@ class MeshCentralCard extends HTMLElement {
     return (this._config?.devices?.length || 1) + 1;
   }
 
-  static getConfigElement() {
-    return document.createElement("meshcentral-card-editor");
-  }
-
   static getStubConfig() {
     return { title: "MeshCentral Devices", devices: ["fedora", "ASUS-GamerPC"] };
   }

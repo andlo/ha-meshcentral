@@ -19,8 +19,26 @@ run_command:
       selector:
         text:
     run_as_user:
-      name: Run as user
-      description: Run command in user context instead of system/root context
+      name: Run in interactive user session
+      description: >
+        Request MeshCentral runAsUser mode 2. On Windows this targets the
+        interactive session, but the agent may retain its service security token.
+      required: false
+      default: false
+      selector:
+        boolean:
+    wait_for_output:
+      name: Wait for command output
+      description: >
+        Wait for the remote process to exit and return output. Disable this for
+        screensavers, GUI applications, and other long-running commands.
+      required: false
+      default: true
+      selector:
+        boolean:
+    powershell:
+      name: PowerShell
+      description: Execute the command using MeshCentral PowerShell command type 2.
       required: false
       default: false
       selector:

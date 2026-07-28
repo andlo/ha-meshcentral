@@ -40,10 +40,16 @@ class ServerVersionCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     async def _async_update_data(self) -> dict[str, Any]:
         data: dict[str, Any] = {"installed": None, "latest": None}
 
-        # Best case: the server tells us directly (only works for full
-        # site-admins on a regular username/password login — see
-        # client.get_server_version_tags docstring).
-        tags = await self._main.client.get_server_version_tags()
+        # Fast path: serverconsole info returns MeshCentral's in-memory
+        # current version and does not wait for an npm dist-tag lookup.
+        installed = await self._main.client.get_installed_server_version()
+        if installed:
+            data["installed"] = installed
+
+        # Compatibility fallback for servers that do not permit serverconsole.
+        tags = None
+        if not installed:
+            tags = await self._main.client.get_server_version_tags()
         if tags:
             data["installed"] = tags.get("current")
             if tags.get("latest"):
@@ -109,12 +115,7 @@ class _ServerBase(CoordinatorEntity[ServerVersionCoordinator], SensorEntity):
 
 
 class MeshCentralInstalledVersionSensor(_ServerBase):
-    """Installed MeshCentral server version.
-
-    Only populated for full site-admin accounts logged in with a regular
-    username/password (not a Login Token / 2FA-bypass token — MeshCentral
-    itself refuses this check for those sessions). Otherwise stays unknown.
-    """
+    """Installed MeshCentral server version."""
 
     _attr_name = "Installed Version"
     _attr_icon = "mdi:server"

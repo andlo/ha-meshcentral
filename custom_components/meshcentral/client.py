@@ -52,6 +52,7 @@ class MeshCentralClient:
         self._login_key = login_key or None
         self._session: aiohttp.ClientSession | None = None
         self._cookie: str | None = None
+        self._ssl_ctx_cache: ssl.SSLContext | None = None
 
     @property
     def _key_param(self) -> str:
@@ -72,13 +73,28 @@ class MeshCentralClient:
         return f"{scheme}://{self._host}:{self._port}{WS_CONTROL_PATH}{self._key_param}"
 
     def _ssl_context(self) -> ssl.SSLContext | bool:
+        """Return the SSL context for requests.
+
+        When verification is disabled, build a bare SSLContext directly
+        instead of ssl.create_default_context(): the default-context
+        constructor also loads the system's CA store from disk, which is
+        blocking I/O HA's event loop flags — but since verification is off
+        here, no CA store is actually needed, so we can skip loading one
+        entirely rather than deferring the load to an executor thread.
+        No cert store to load means nothing here blocks or can stall
+        waiting on a thread pool.
+
+        Credit: @Onoitsu2, PR #31.
+        """
         if not self._use_ssl:
             return False
         if not self._verify_ssl:
-            ctx = ssl.create_default_context()
-            ctx.check_hostname = False
-            ctx.verify_mode = ssl.CERT_NONE
-            return ctx
+            if self._ssl_ctx_cache is None:
+                ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+                ctx.check_hostname = False
+                ctx.verify_mode = ssl.CERT_NONE
+                self._ssl_ctx_cache = ctx
+            return self._ssl_ctx_cache
         return True
 
     async def _get_session(self) -> aiohttp.ClientSession:
@@ -140,7 +156,12 @@ class MeshCentralClient:
                     try:
                         msg = await asyncio.wait_for(ws.receive(), timeout=5)
                     except asyncio.TimeoutError:
-                        break
+                        # The 5s receive() timeout is only a polling interval
+                        # so we can re-check the overall deadline below — not
+                        # the actual request timeout. Keep waiting for a
+                        # response until WS_TIMEOUT actually elapses instead
+                        # of giving up on the first slow-but-valid response.
+                        continue
                     if msg.type == aiohttp.WSMsgType.TEXT:
                         data = json.loads(msg.data)
                         if data.get("action") == response_action:
@@ -176,14 +197,92 @@ class MeshCentralClient:
             )
         return None
 
+    async def _send_command_recv(
+        self,
+        payload: dict,
+        response_id: str,
+        wait_for_output: bool,
+    ) -> Any:
+        """Open a WebSocket for runcommands and match its reply.
+
+        MeshCentral answers runcommands in one of two shapes: an immediate
+        ``action: runcommands`` acknowledgement that the command was
+        dispatched (result usually just "OK"), and — once the remote
+        process actually exits — a separate ``action: msg`` message with
+        ``type: runcommands`` carrying the real output. Which one counts
+        as "done" depends on wait_for_output: False accepts the immediate
+        ack (fire-and-forget, e.g. for GUI apps that never exit), True
+        holds out for the delayed message with actual output.
+
+        Credit: @Onoitsu2, PR #33.
+        """
+        session = await self._get_session()
+        ssl_ctx = self._ssl_context()
+        headers = {"Cookie": self._cookie} if self._cookie else {}
+        try:
+            async with session.ws_connect(
+                self.ws_url,
+                ssl=ssl_ctx,
+                headers=headers,
+                timeout=aiohttp.ClientTimeout(total=WS_TIMEOUT),
+            ) as ws:
+                await ws.send_str(json.dumps(payload))
+                deadline = time.monotonic() + WS_TIMEOUT
+                while time.monotonic() < deadline:
+                    try:
+                        msg = await asyncio.wait_for(ws.receive(), timeout=5)
+                    except asyncio.TimeoutError:
+                        continue
+
+                    if msg.type == aiohttp.WSMsgType.TEXT:
+                        try:
+                            data = json.loads(msg.data)
+                        except (TypeError, json.JSONDecodeError):
+                            continue
+
+                        if data.get("responseid") != response_id:
+                            continue
+
+                        if not wait_for_output:
+                            if data.get("action") == "runcommands":
+                                return data
+                            continue
+
+                        if data.get("type") == "runcommands":
+                            return data
+
+                        if data.get("action") == "runcommands":
+                            result = data.get("result")
+                            if (
+                                result not in (None, "OK", "ok")
+                                or "output" in data
+                                or "value" in data
+                            ):
+                                return data
+
+                    elif msg.type in (
+                        aiohttp.WSMsgType.CLOSED,
+                        aiohttp.WSMsgType.ERROR,
+                    ):
+                        break
+        except Exception as err:
+            _LOGGER.error("Command WebSocket error: %s", err)
+        return None
+
     async def get_devices(self) -> list[dict]:
         """Return all devices the authenticated user can access."""
         result = await self._send_recv(
-            {"action": "nodes", "responseid": "ha-nodes"},
+            {"action": "nodes", "responseid": f"ha-nodes-{time.monotonic_ns()}"},
             "nodes",
         )
         if result is None:
-            return []
+            # Distinguish "request failed" from "genuinely zero devices" —
+            # returning [] here would let a failed/timed-out request look
+            # identical to an empty account, which on first load (before
+            # the coordinator has any prior data to compare against) was
+            # silently accepted as valid and left every derived sensor
+            # confidently showing 0 instead of unavailable (#30).
+            raise TimeoutError("MeshCentral did not respond to the 'nodes' request")
         devices = []
         for mesh_id, node_list in result.get("nodes", {}).items():
             for node in node_list:
@@ -195,7 +294,7 @@ class MeshCentralClient:
     async def get_device_groups(self) -> list[dict]:
         """Return all device groups (meshes)."""
         result = await self._send_recv(
-            {"action": "meshes", "responseid": "ha-meshes"},
+            {"action": "meshes", "responseid": f"ha-meshes-{time.monotonic_ns()}"},
             "meshes",
         )
         if result is None:
@@ -210,12 +309,87 @@ class MeshCentralClient:
         server.
         """
         result = await self._send_recv(
-            {"action": "users", "responseid": "ha-users"},
+            {"action": "users", "responseid": f"ha-users-{time.monotonic_ns()}"},
             "users",
         )
         if result is None:
             return []
         return result.get("users", [])
+
+    async def get_installed_server_version(self) -> str | None:
+        """Read the installed MeshCentral version from serverconsole info.
+
+        Faster and more broadly available than get_server_version_tags():
+        "serverconsole info" returns MeshCentral's in-memory current version
+        immediately, without waiting on an npm dist-tag lookup (which can be
+        slow or fail outright on a server with restricted/no internet
+        access). Uses its own short-lived WS connection since the reply is
+        matched by "tag", not the "responseid" scheme _send_recv expects.
+
+        Credit: @Onoitsu2, PR #34.
+        """
+        session = await self._get_session()
+        ssl_ctx = self._ssl_context()
+        headers = {"Cookie": self._cookie} if self._cookie else {}
+        tag = f"ha-server-info-{time.monotonic_ns()}"
+        try:
+            async with session.ws_connect(
+                self.ws_url,
+                ssl=ssl_ctx,
+                headers=headers,
+                timeout=aiohttp.ClientTimeout(total=8),
+            ) as ws:
+                await ws.send_str(
+                    json.dumps(
+                        {
+                            "action": "serverconsole",
+                            "value": "info",
+                            "tag": tag,
+                        }
+                    )
+                )
+                deadline = time.monotonic() + 8
+                while time.monotonic() < deadline:
+                    try:
+                        msg = await asyncio.wait_for(ws.receive(), timeout=2)
+                    except asyncio.TimeoutError:
+                        continue
+
+                    if msg.type == aiohttp.WSMsgType.TEXT:
+                        try:
+                            data = json.loads(msg.data)
+                        except (TypeError, json.JSONDecodeError):
+                            continue
+                        if (
+                            data.get("action") != "serverconsole"
+                            or data.get("tag") != tag
+                        ):
+                            continue
+
+                        value = data.get("value")
+                        if not isinstance(value, str):
+                            return None
+                        try:
+                            info = json.loads(value)
+                        except json.JSONDecodeError:
+                            return None
+                        version = info.get("meshVersion")
+                        if not isinstance(version, str) or not version:
+                            return None
+                        return (
+                            version[1:]
+                            if version.lower().startswith("v")
+                            else version
+                        )
+
+                    if msg.type in (
+                        aiohttp.WSMsgType.CLOSED,
+                        aiohttp.WSMsgType.ERROR,
+                    ):
+                        break
+        except Exception as err:
+            _LOGGER.debug("MeshCentral serverconsole info failed: %s", err)
+        return None
 
     async def get_server_version_tags(self) -> dict | None:
         """Return the server's own version info, if this session is allowed to.
@@ -233,7 +407,7 @@ class MeshCentralClient:
         the server itself has no internet/npm access.
         """
         result = await self._send_recv(
-            {"action": "serverversion", "responseid": "ha-serverversion"},
+            {"action": "serverversion", "responseid": f"ha-serverversion-{time.monotonic_ns()}"},
             "serverversion",
         )
         if result and isinstance(result.get("tags"), dict):
@@ -246,7 +420,7 @@ class MeshCentralClient:
             {
                 "action": "getsysinfo",
                 "nodeid": node_id,
-                "responseid": "ha-sysinfo",
+                "responseid": f"ha-sysinfo-{time.monotonic_ns()}",
             },
             "getsysinfo",
         )
@@ -268,7 +442,7 @@ class MeshCentralClient:
                 "action": "poweraction",
                 "nodeid": node_id,
                 "actiontype": action_type,
-                "responseid": "ha-pwr",
+                "responseid": f"ha-pwr-{time.monotonic_ns()}",
             },
             "poweraction",
         )
@@ -286,7 +460,7 @@ class MeshCentralClient:
             {
                 "action": "wakedevices",
                 "nodeids": [node_id],
-                "responseid": "ha-wol",
+                "responseid": f"ha-wol-{time.monotonic_ns()}",
             },
             "wakedevices",
         )
@@ -295,24 +469,36 @@ class MeshCentralClient:
         return None
 
     async def run_command(
-        self, node_id: str, command: str, run_as_user: bool = False
+        self,
+        node_id: str,
+        command: str,
+        run_as_user: bool = False,
+        wait_for_output: bool = True,
+        powershell: bool = False,
     ) -> str | None:
-        """Run a shell command on a device via MeshCentral agent.
+        """Run a shell or PowerShell command through the MeshCentral agent.
 
         Returns command output as string, or None on timeout/failure.
         """
-        result = await self._send_recv(
+        response_id = f"ha-cmd-{time.monotonic_ns()}"
+        result = await self._send_command_recv(
             {
                 "action": "runcommands",
-                "nodeid": node_id,
-                "type": 1 if run_as_user else 0,
+                "nodeids": [node_id],
+                "type": 2 if powershell else 0,
                 "cmds": command,
-                "responseid": f"ha-cmd-{node_id[:8]}",
+                "responseid": response_id,
+                "runAsUser": 2 if run_as_user else 0,
+                "reply": wait_for_output,
             },
-            "runcommands",
+            response_id,
+            wait_for_output,
         )
-        if result:
-            return result.get("result", result.get("output", ""))
+        if result is not None:
+            return result.get(
+                "result",
+                result.get("output", result.get("value", "")),
+            )
         return None
 
     async def close(self) -> None:

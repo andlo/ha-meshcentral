@@ -5,7 +5,7 @@ import logging
 
 from homeassistant.components.button import ButtonEntity, ButtonDeviceClass
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
@@ -28,22 +28,37 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     coordinator: MeshCentralCoordinator = hass.data[DOMAIN][entry.entry_id]
-    entities = []
-    for node_id in coordinator.data:
-        node = coordinator.data[node_id]
-        is_windows = "wsc" in node  # Windows nodes have wsc field
+    known_node_ids: set[str] = set()
 
-        entities += [
-            MeshCentralRebootButton(coordinator, node_id),
-            MeshCentralShutdownButton(coordinator, node_id),
-            MeshCentralWolButton(coordinator, node_id),
+    @callback
+    def _async_add_new_device_entities() -> None:
+        data = coordinator.data or {}
+        new_node_ids = [
+            node_id for node_id in data if node_id not in known_node_ids
         ]
-        if is_windows:
+        if not new_node_ids:
+            return
+
+        known_node_ids.update(new_node_ids)
+        entities = []
+        for node_id in new_node_ids:
+            node = data[node_id]
             entities += [
-                MeshCentralSleepButton(coordinator, node_id),
-                MeshCentralHibernateButton(coordinator, node_id),
+                MeshCentralRebootButton(coordinator, node_id),
+                MeshCentralShutdownButton(coordinator, node_id),
+                MeshCentralWolButton(coordinator, node_id),
             ]
-    async_add_entities(entities)
+            if "wsc" in node:
+                entities += [
+                    MeshCentralSleepButton(coordinator, node_id),
+                    MeshCentralHibernateButton(coordinator, node_id),
+                ]
+        async_add_entities(entities)
+
+    _async_add_new_device_entities()
+    entry.async_on_unload(
+        coordinator.async_add_listener(_async_add_new_device_entities)
+    )
 
 
 class _BaseButton(CoordinatorEntity[MeshCentralCoordinator], ButtonEntity):

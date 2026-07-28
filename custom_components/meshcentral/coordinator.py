@@ -67,20 +67,39 @@ class MeshCentralCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         try:
             devices = await self.client.get_devices()
+        except TimeoutError as err:
+            self._logged_in = False
+
+            # A missed *first-ever* nodes response shouldn't prevent the
+            # config entry from loading at all. Raising here (as we do for
+            # every other failure) aborts async_config_entry_first_refresh()
+            # entirely, which means the persistent event listener — started
+            # further down, only after a successful refresh — never gets a
+            # chance to start and self-heal via its own post-connect
+            # refresh. Continuing with an empty device list on this specific
+            # first-load case lets setup finish and the listener take over.
+            # Once we have real data, preserve the strict behavior: a later
+            # empty/timed-out response must not silently replace it (#29).
+            if self.data:
+                raise UpdateFailed(f"Error fetching devices: {err}") from err
+
+            _LOGGER.warning(
+                "Initial MeshCentral nodes request timed out; continuing "
+                "setup and allowing the event listener to retry"
+            )
+            devices = []
         except Exception as err:
             self._logged_in = False
             raise UpdateFailed(f"Error fetching devices: {err}") from err
 
         data = {d["_id"]: d for d in devices if "_id" in d}
 
-        # client.get_devices() fails "soft" (returns []) rather than raising
-        # when MeshCentral doesn't answer in time — typically because the
-        # session cookie went stale (e.g. right after a MeshCentral server
-        # restart). Getting 0 devices when we previously had some is almost
-        # certainly a dead session, not the user suddenly having no devices.
-        # Treat it as a failure so HA marks entities unavailable and we
-        # retry with a fresh login, instead of silently wiping good data
-        # with an empty result (#29).
+        # client.get_devices() now raises on a failed/timed-out request
+        # (see #30) rather than returning [], so the except above already
+        # catches that case. This is defense-in-depth for the separate
+        # edge case where the request genuinely succeeds but reports 0
+        # devices after we previously had some — treat that as suspect
+        # too rather than trusting it outright (#29).
         if not data and self.data:
             self._logged_in = False
             raise UpdateFailed(
