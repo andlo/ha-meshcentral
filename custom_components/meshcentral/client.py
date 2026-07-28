@@ -272,7 +272,7 @@ class MeshCentralClient:
     async def get_devices(self) -> list[dict]:
         """Return all devices the authenticated user can access."""
         result = await self._send_recv(
-            {"action": "nodes", "responseid": "ha-nodes"},
+            {"action": "nodes", "responseid": f"ha-nodes-{time.monotonic_ns()}"},
             "nodes",
         )
         if result is None:
@@ -294,7 +294,7 @@ class MeshCentralClient:
     async def get_device_groups(self) -> list[dict]:
         """Return all device groups (meshes)."""
         result = await self._send_recv(
-            {"action": "meshes", "responseid": "ha-meshes"},
+            {"action": "meshes", "responseid": f"ha-meshes-{time.monotonic_ns()}"},
             "meshes",
         )
         if result is None:
@@ -309,7 +309,7 @@ class MeshCentralClient:
         server.
         """
         result = await self._send_recv(
-            {"action": "users", "responseid": "ha-users"},
+            {"action": "users", "responseid": f"ha-users-{time.monotonic_ns()}"},
             "users",
         )
         if result is None:
@@ -407,7 +407,7 @@ class MeshCentralClient:
         the server itself has no internet/npm access.
         """
         result = await self._send_recv(
-            {"action": "serverversion", "responseid": "ha-serverversion"},
+            {"action": "serverversion", "responseid": f"ha-serverversion-{time.monotonic_ns()}"},
             "serverversion",
         )
         if result and isinstance(result.get("tags"), dict):
@@ -420,7 +420,7 @@ class MeshCentralClient:
             {
                 "action": "getsysinfo",
                 "nodeid": node_id,
-                "responseid": "ha-sysinfo",
+                "responseid": f"ha-sysinfo-{time.monotonic_ns()}",
             },
             "getsysinfo",
         )
@@ -442,7 +442,7 @@ class MeshCentralClient:
                 "action": "poweraction",
                 "nodeid": node_id,
                 "actiontype": action_type,
-                "responseid": "ha-pwr",
+                "responseid": f"ha-pwr-{time.monotonic_ns()}",
             },
             "poweraction",
         )
@@ -460,7 +460,7 @@ class MeshCentralClient:
             {
                 "action": "wakedevices",
                 "nodeids": [node_id],
-                "responseid": "ha-wol",
+                "responseid": f"ha-wol-{time.monotonic_ns()}",
             },
             "wakedevices",
         )
