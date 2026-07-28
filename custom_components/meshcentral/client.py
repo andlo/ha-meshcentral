@@ -72,21 +72,25 @@ class MeshCentralClient:
         scheme = "wss" if self._use_ssl else "ws"
         return f"{scheme}://{self._host}:{self._port}{WS_CONTROL_PATH}{self._key_param}"
 
-    async def _ssl_context(self) -> ssl.SSLContext | bool:
-        """Return the SSL context for requests, built off the event loop.
+    def _ssl_context(self) -> ssl.SSLContext | bool:
+        """Return the SSL context for requests.
 
-        ssl.create_default_context() does blocking disk I/O (loading the
-        system's default CA certs), so it must not be called directly on
-        the event loop — HA's blocking-call detector flags this, and on
-        a busy instance it can stall/interfere with time-sensitive login
-        and WebSocket request/response cycles. Built once and cached.
+        When verification is disabled, build a bare SSLContext directly
+        instead of ssl.create_default_context(): the default-context
+        constructor also loads the system's CA store from disk, which is
+        blocking I/O HA's event loop flags — but since verification is off
+        here, no CA store is actually needed, so we can skip loading one
+        entirely rather than deferring the load to an executor thread.
+        No cert store to load means nothing here blocks or can stall
+        waiting on a thread pool.
+
+        Credit: @Onoitsu2, PR #31.
         """
         if not self._use_ssl:
             return False
         if not self._verify_ssl:
             if self._ssl_ctx_cache is None:
-                loop = asyncio.get_event_loop()
-                ctx = await loop.run_in_executor(None, ssl.create_default_context)
+                ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
                 ctx.check_hostname = False
                 ctx.verify_mode = ssl.CERT_NONE
                 self._ssl_ctx_cache = ctx
@@ -101,7 +105,7 @@ class MeshCentralClient:
     async def login(self) -> bool:
         """Authenticate with MeshCentral and store session cookie."""
         session = await self._get_session()
-        ssl_ctx = await self._ssl_context()
+        ssl_ctx = self._ssl_context()
         login_url = f"{self.base_url}/login{self._key_param}"
         payload = {"username": self._username, "password": self._password}
         _LOGGER.debug("Logging in to MeshCentral at %s", login_url)
@@ -134,7 +138,7 @@ class MeshCentralClient:
     async def _send_recv(self, payload: dict, response_action: str) -> Any:
         """Open a WebSocket, send a command, and return the matching response."""
         session = await self._get_session()
-        ssl_ctx = await self._ssl_context()
+        ssl_ctx = self._ssl_context()
         headers = {"Cookie": self._cookie} if self._cookie else {}
         action = payload.get("action", "?")
         opened = time.monotonic()
@@ -213,7 +217,7 @@ class MeshCentralClient:
         Credit: @Onoitsu2, PR #33.
         """
         session = await self._get_session()
-        ssl_ctx = await self._ssl_context()
+        ssl_ctx = self._ssl_context()
         headers = {"Cookie": self._cookie} if self._cookie else {}
         try:
             async with session.ws_connect(
@@ -325,7 +329,7 @@ class MeshCentralClient:
         Credit: @Onoitsu2, PR #34.
         """
         session = await self._get_session()
-        ssl_ctx = await self._ssl_context()
+        ssl_ctx = self._ssl_context()
         headers = {"Cookie": self._cookie} if self._cookie else {}
         tag = f"ha-server-info-{time.monotonic_ns()}"
         try:

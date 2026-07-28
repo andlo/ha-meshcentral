@@ -120,7 +120,7 @@ class MeshCentralCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             self._logged_in = True
 
         ws_url = self.client.ws_url
-        ssl_ctx = await self.client._ssl_context()
+        ssl_ctx = self.client._ssl_context()
         headers = {"Cookie": self.client._cookie} if self.client._cookie else {}
 
         session = await self.client._get_session()
