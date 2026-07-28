@@ -468,6 +468,83 @@ class MeshCentralClient:
             return result.get("result", "ok")
         return None
 
+    async def run_console_command(self, node_id: str, command: str) -> str | None:
+        """Send a MeshCentral agent console command (e.g. "help", "apf cira").
+
+        This is a different protocol from run_command: the built-in agent
+        console commands (see MeshCentral's own console tab for a device —
+        "help" lists them) are dispatched via the same "runcommands" action
+        but with type=4, and the output arrives as a separate event —
+        {"action": "msg", "type": "console", "nodeid": ..., "value": ...} —
+        matched by node ID rather than a responseid, since the console
+        reply doesn't carry one.
+
+        Requires the account to hold the "agentconsole" device/mesh right
+        on the target — without it, MeshCentral accepts the request but
+        never sends a console reply, so this will simply time out.
+
+        Returns the console output as a string, or None on timeout/failure.
+        """
+        session = await self._get_session()
+        ssl_ctx = self._ssl_context()
+        headers = {"Cookie": self._cookie} if self._cookie else {}
+        try:
+            async with session.ws_connect(
+                self.ws_url,
+                ssl=ssl_ctx,
+                headers=headers,
+                timeout=aiohttp.ClientTimeout(total=WS_TIMEOUT),
+            ) as ws:
+                await ws.send_str(
+                    json.dumps(
+                        {
+                            "action": "runcommands",
+                            "nodeids": [node_id],
+                            "type": 4,
+                            "cmds": command,
+                        }
+                    )
+                )
+                deadline = time.monotonic() + WS_TIMEOUT
+                lines: list[str] = []
+                while time.monotonic() < deadline:
+                    try:
+                        msg = await asyncio.wait_for(ws.receive(), timeout=5)
+                    except asyncio.TimeoutError:
+                        continue
+
+                    if msg.type == aiohttp.WSMsgType.TEXT:
+                        try:
+                            data = json.loads(msg.data)
+                        except (TypeError, json.JSONDecodeError):
+                            continue
+                        if (
+                            data.get("action") == "msg"
+                            and data.get("type") == "console"
+                            and data.get("nodeid") == node_id
+                        ):
+                            value = data.get("value", "")
+                            lines.append(value)
+                            _LOGGER.debug(
+                                "run_console_command: got console output "
+                                "line for %s: %.200s",
+                                node_id,
+                                value,
+                            )
+                            # MeshCentral's console tab treats each console
+                            # reply as complete on arrival rather than
+                            # streaming multiple lines for one command, so
+                            # return as soon as we have one.
+                            return "\n".join(lines)
+                    elif msg.type in (
+                        aiohttp.WSMsgType.CLOSED,
+                        aiohttp.WSMsgType.ERROR,
+                    ):
+                        break
+        except Exception as err:
+            _LOGGER.error("Console command WebSocket error: %s", err)
+        return None
+
     async def run_command(
         self,
         node_id: str,

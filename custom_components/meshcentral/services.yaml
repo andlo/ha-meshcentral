@@ -52,3 +52,38 @@ run_command:
       default: false
       selector:
         boolean:
+
+run_console_command:
+  name: Run Console Command
+  description: >
+    Send one of MeshCentral's built-in agent console commands (e.g. "apf cira",
+    "info") — not an OS shell command, see the run_command service for that.
+    Send "help" to list available commands for a device. Requires the account
+    to hold the "agentconsole" right on the device or mesh; without it,
+    MeshCentral accepts the request but never replies, and this will time out.
+  fields:
+    device_id:
+      name: Device ID or Name
+      description: The MeshCentral node ID or device name (e.g. "fedora" or "ASUS-GamerPC")
+      required: true
+      example: "fedora"
+      selector:
+        text:
+    command:
+      name: Console Command
+      description: >
+        MeshCentral agent console command to send, e.g. "help", "info", "apf cira".
+      required: true
+      example: "help"
+      selector:
+        text:
+    notify:
+      name: Notify
+      description: >
+        Create a persistent notification in Home Assistant with the command output.
+        A "meshcentral_console_command_result" event is always fired regardless
+        of this setting.
+      required: false
+      default: false
+      selector:
+        boolean:

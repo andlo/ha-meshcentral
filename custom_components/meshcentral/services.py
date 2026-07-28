@@ -14,7 +14,9 @@ from .coordinator import MeshCentralCoordinator
 _LOGGER = logging.getLogger(__name__)
 
 SERVICE_RUN_COMMAND = "run_command"
+SERVICE_RUN_CONSOLE_COMMAND = "run_console_command"
 EVENT_COMMAND_RESULT = "meshcentral_command_result"
+EVENT_CONSOLE_COMMAND_RESULT = "meshcentral_console_command_result"
 
 SERVICE_RUN_COMMAND_SCHEMA = vol.Schema(
     {
@@ -23,6 +25,14 @@ SERVICE_RUN_COMMAND_SCHEMA = vol.Schema(
         vol.Optional("run_as_user", default=False): cv.boolean,
         vol.Optional("wait_for_output", default=True): cv.boolean,
         vol.Optional("powershell", default=False): cv.boolean,
+        vol.Optional("notify", default=False): cv.boolean,
+    }
+)
+
+SERVICE_RUN_CONSOLE_COMMAND_SCHEMA = vol.Schema(
+    {
+        vol.Required("device_id"): cv.string,
+        vol.Required("command"): cv.string,
         vol.Optional("notify", default=False): cv.boolean,
     }
 )
@@ -95,11 +105,87 @@ def async_register_services(hass: HomeAssistant) -> None:
 
         return {"success": success, "device": device_name, "command": command, "output": result}
 
+    async def handle_run_console_command(call: ServiceCall) -> ServiceResponse:
+        """Send a MeshCentral agent console command (e.g. "apf cira", "info").
+
+        Different from run_command: these are MeshCentral's own built-in
+        agent console commands (see the device's Console tab in the
+        MeshCentral web UI — "help" lists them), not OS shell commands.
+        Requires the account to hold the "agentconsole" right on the
+        device/mesh, or MeshCentral will accept the request but never
+        reply, and this will time out (#28).
+        """
+        device_id = call.data["device_id"]
+        command = call.data["command"]
+        notify = call.data.get("notify", False)
+
+        coordinator, node_id = _find_node(hass, device_id)
+        if not coordinator or not node_id:
+            _LOGGER.error(
+                "run_console_command: device '%s' not found in MeshCentral", device_id
+            )
+            return {"success": False, "device": device_id, "command": command, "output": None}
+
+        node = (coordinator.data or {}).get(node_id)
+        device_name = node.get("name", device_id) if node else device_id
+
+        if node is not None and not (node.get("conn", 0) & CONN_AGENT):
+            _LOGGER.warning(
+                "run_console_command: device '%s' is offline, command not sent",
+                device_name,
+            )
+            return {"success": False, "device": device_name, "command": command, "output": None}
+
+        result = await coordinator.client.run_console_command(node_id, command)
+        success = result is not None
+
+        if success:
+            _LOGGER.info(
+                "run_console_command on '%s': %s",
+                device_name,
+                result[:200] if result else "(no output)",
+            )
+        else:
+            _LOGGER.warning(
+                "run_console_command on '%s' returned no response — check the "
+                "account has the 'agentconsole' right on this device/mesh",
+                device_name,
+            )
+
+        hass.bus.async_fire(
+            EVENT_CONSOLE_COMMAND_RESULT,
+            {
+                "device_id": node_id,
+                "device_name": device_name,
+                "command": command,
+                "success": success,
+                "output": result,
+            },
+        )
+
+        if notify:
+            async_create_notification(
+                hass,
+                f"Console command: `{command}`\n\n```\n{result or '(no output)'}\n```",
+                title=f"MeshCentral: {device_name}",
+                notification_id=f"meshcentral_run_console_command_{node_id}",
+            )
+
+        return {"success": success, "device": device_name, "command": command, "output": result}
+
     hass.services.async_register(
         DOMAIN,
         SERVICE_RUN_COMMAND,
         handle_run_command,
         schema=SERVICE_RUN_COMMAND_SCHEMA,
+        supports_response=SupportsResponse.OPTIONAL,
+    )
+
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_RUN_CONSOLE_COMMAND,
+        handle_run_console_command,
+        schema=SERVICE_RUN_CONSOLE_COMMAND_SCHEMA,
         supports_response=SupportsResponse.OPTIONAL,
     )
 
