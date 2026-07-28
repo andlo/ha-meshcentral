@@ -152,7 +152,12 @@ class MeshCentralClient:
                     try:
                         msg = await asyncio.wait_for(ws.receive(), timeout=5)
                     except asyncio.TimeoutError:
-                        break
+                        # The 5s receive() timeout is only a polling interval
+                        # so we can re-check the overall deadline below — not
+                        # the actual request timeout. Keep waiting for a
+                        # response until WS_TIMEOUT actually elapses instead
+                        # of giving up on the first slow-but-valid response.
+                        continue
                     if msg.type == aiohttp.WSMsgType.TEXT:
                         data = json.loads(msg.data)
                         if data.get("action") == response_action:
