@@ -67,6 +67,22 @@ class MeshCentralCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         try:
             devices = await self.client.get_devices()
+        except TimeoutError as err:
+            self._logged_in = False
+
+            # A missed first nodes response should not prevent the config entry
+            # from loading. The persistent event listener starts below and
+            # performs its own full refresh immediately after connecting.
+            # Preserve the existing failure behavior for later refreshes where
+            # we already have device data that must not be replaced with empty.
+            if self.data:
+                raise UpdateFailed(f"Error fetching devices: {err}") from err
+
+            _LOGGER.warning(
+                "Initial MeshCentral nodes request timed out; continuing setup "
+                "and allowing the event listener to retry"
+            )
+            devices = []
         except Exception as err:
             self._logged_in = False
             raise UpdateFailed(f"Error fetching devices: {err}") from err
