@@ -193,6 +193,78 @@ class MeshCentralClient:
             )
         return None
 
+    async def _send_command_recv(
+        self,
+        payload: dict,
+        response_id: str,
+        wait_for_output: bool,
+    ) -> Any:
+        """Open a WebSocket for runcommands and match its reply.
+
+        MeshCentral answers runcommands in one of two shapes: an immediate
+        ``action: runcommands`` acknowledgement that the command was
+        dispatched (result usually just "OK"), and — once the remote
+        process actually exits — a separate ``action: msg`` message with
+        ``type: runcommands`` carrying the real output. Which one counts
+        as "done" depends on wait_for_output: False accepts the immediate
+        ack (fire-and-forget, e.g. for GUI apps that never exit), True
+        holds out for the delayed message with actual output.
+
+        Credit: @Onoitsu2, PR #33.
+        """
+        session = await self._get_session()
+        ssl_ctx = await self._ssl_context()
+        headers = {"Cookie": self._cookie} if self._cookie else {}
+        try:
+            async with session.ws_connect(
+                self.ws_url,
+                ssl=ssl_ctx,
+                headers=headers,
+                timeout=aiohttp.ClientTimeout(total=WS_TIMEOUT),
+            ) as ws:
+                await ws.send_str(json.dumps(payload))
+                deadline = time.monotonic() + WS_TIMEOUT
+                while time.monotonic() < deadline:
+                    try:
+                        msg = await asyncio.wait_for(ws.receive(), timeout=5)
+                    except asyncio.TimeoutError:
+                        continue
+
+                    if msg.type == aiohttp.WSMsgType.TEXT:
+                        try:
+                            data = json.loads(msg.data)
+                        except (TypeError, json.JSONDecodeError):
+                            continue
+
+                        if data.get("responseid") != response_id:
+                            continue
+
+                        if not wait_for_output:
+                            if data.get("action") == "runcommands":
+                                return data
+                            continue
+
+                        if data.get("type") == "runcommands":
+                            return data
+
+                        if data.get("action") == "runcommands":
+                            result = data.get("result")
+                            if (
+                                result not in (None, "OK", "ok")
+                                or "output" in data
+                                or "value" in data
+                            ):
+                                return data
+
+                    elif msg.type in (
+                        aiohttp.WSMsgType.CLOSED,
+                        aiohttp.WSMsgType.ERROR,
+                    ):
+                        break
+        except Exception as err:
+            _LOGGER.error("Command WebSocket error: %s", err)
+        return None
+
     async def get_devices(self) -> list[dict]:
         """Return all devices the authenticated user can access."""
         result = await self._send_recv(
@@ -318,25 +390,36 @@ class MeshCentralClient:
         return None
 
     async def run_command(
-        self, node_id: str, command: str, run_as_user: bool = False
+        self,
+        node_id: str,
+        command: str,
+        run_as_user: bool = False,
+        wait_for_output: bool = True,
+        powershell: bool = False,
     ) -> str | None:
-        """Run a shell command on a device via MeshCentral agent.
+        """Run a shell or PowerShell command through the MeshCentral agent.
 
         Returns command output as string, or None on timeout/failure.
         """
-        result = await self._send_recv(
+        response_id = f"ha-cmd-{time.monotonic_ns()}"
+        result = await self._send_command_recv(
             {
                 "action": "runcommands",
                 "nodeids": [node_id],
-                "type": 0,
-                "runAsUser": 2 if run_as_user else 0,
+                "type": 2 if powershell else 0,
                 "cmds": command,
-                "responseid": f"ha-cmd-{node_id[:8]}",
+                "responseid": response_id,
+                "runAsUser": 2 if run_as_user else 0,
+                "reply": wait_for_output,
             },
-            "runcommands",
+            response_id,
+            wait_for_output,
         )
-        if result:
-            return result.get("result", result.get("output", ""))
+        if result is not None:
+            return result.get(
+                "result",
+                result.get("output", result.get("value", "")),
+            )
         return None
 
     async def close(self) -> None:
