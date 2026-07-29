@@ -64,11 +64,14 @@ run_console_command:
   fields:
     device_id:
       name: Device ID or Name
-      description: The MeshCentral node ID or device name (e.g. "fedora" or "ASUS-GamerPC")
+      description: >
+        One or more MeshCentral node IDs or device names (e.g. "fedora" or
+        "ASUS-GamerPC"). Sent as a single request per MeshCentral server involved.
       required: true
-      example: "fedora"
+      example: ["fedora", "ASUS-GamerPC"]
       selector:
         text:
+          multiple: true
     command:
       name: Console Command
       description: >
