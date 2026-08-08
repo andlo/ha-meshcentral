@@ -1,6 +1,6 @@
 # MeshCentral integration for Home Assistant
 
-[![hacs_badge](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://github.com/hacs/integration)[![GitHub release](https://img.shields.io/github/release/andlo/ha-meshcentral.svg)](https://github.com/andlo/ha-meshcentral/releases)[![License](https://img.shields.io/github/license/andlo/ha-meshcentral.svg)](LICENSE)
+[![hacs_badge](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://github.com/hacs/integration) [![GitHub release](https://img.shields.io/github/release/andlo/ha-meshcentral.svg)](https://github.com/andlo/ha-meshcentral/releases) [![License](https://img.shields.io/github/license/andlo/ha-meshcentral.svg)](LICENSE)
 
 Home Assistant custom integration for [MeshCentral](https://meshcentral.com) — the open-source remote management platform.
 
