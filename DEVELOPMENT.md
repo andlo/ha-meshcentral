@@ -61,6 +61,10 @@ This document captures technical findings and gotchas discovered while building 
 - Old entities can be removed directly from `.storage/core.entity_registry` using `jq`
 - Entities get `_2` suffix when two integrations register the same `entity_id` — solved by unique prefix in `unique_id`
 
+### HACS
+
+- **HACS store icon shows "icon not available" despite a correct local `brand/` folder (#38):** not our bug. Since HA 2026.3, custom integrations ship their own brand icon inline (`custom_components/meshcentral/brand/icon.png`), served via `/api/brands/integration/{domain}/icon.png` — and it renders fine everywhere in HA core. `home-assistant/brands` now auto-closes PRs for custom integrations and points to this mechanism, so there's no PR to submit anymore. HACS' own store/downloads panel, however, still only fetches icons from `data-v2.hacs.xyz` and hasn't added a fallback to the local proxy — tracked upstream at hacs/integration#5171 and #5223. Nothing to fix here; resolves itself once HACS ships a fix.
+
 ### Lovelace
 
 - Dashboard changes via `.storage/lovelace.dashboard_modern` require a version bump for browsers to update

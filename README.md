@@ -26,15 +26,36 @@ Running MeshCentral alongside Home Assistant is a powerful combination for anyon
 
 ### Per device — Status sensors
 
-EntityDescription`binary_sensor.<n>_online`Agent connectivity (online/offline) — real-time`sensor.<n>_os`OS description`sensor.<n>_ip_address`Last known IP address`sensor.<n>_last_boot`Last boot time (timestamp)`sensor.<n>_idle_time`User idle time in seconds`sensor.<n>_active_users`Currently logged-in users`sensor.<n>_description`Device description from MeshCentral`sensor.<n>_agent_last_seen`When agent last contacted server`sensor.<n>_power_state`Power state: on / off / sleep / hibernate / soft_off / cycle`device_tracker.<n>_tracker`Home/not_home based on agent connectivity
+| Entity | Description |
+|---|---|
+| `binary_sensor.<n>_online` | Agent connectivity (online/offline) — real-time |
+| `sensor.<n>_os` | OS description |
+| `sensor.<n>_ip_address` | Last known IP address |
+| `sensor.<n>_last_boot` | Last boot time (timestamp) |
+| `sensor.<n>_idle_time` | User idle time in seconds |
+| `sensor.<n>_active_users` | Currently logged-in users |
+| `sensor.<n>_description` | Device description from MeshCentral |
+| `sensor.<n>_agent_last_seen` | When agent last contacted server |
+| `sensor.<n>_power_state` | Power state: on / off / sleep / hibernate / soft_off / cycle |
+| `device_tracker.<n>_tracker` | Home/not_home based on agent connectivity |
 
 ### Per device — Security (Windows only)
 
-EntityDescription`binary_sensor.<n>_antivirus_ok`Antivirus status`binary_sensor.<n>_firewall_ok`Firewall status`binary_sensor.<n>_defender_real_time_protection`Windows Defender real-time protection
+| Entity | Description |
+|---|---|
+| `binary_sensor.<n>_antivirus_ok` | Antivirus status |
+| `binary_sensor.<n>_firewall_ok` | Firewall status |
+| `binary_sensor.<n>_defender_real_time_protection` | Windows Defender real-time protection |
 
 ### Per device — Power control
 
-EntityDescription`button.<n>_reboot`Reboot device`button.<n>_shutdown`Shut down device`button.<n>_sleep`Sleep (Windows only)`button.<n>_hibernate`Hibernate (Windows only)`button.<n>_wake_on_lan`Wake-on-LAN via MeshCentral agents
+| Entity | Description |
+|---|---|
+| `button.<n>_reboot` | Reboot device |
+| `button.<n>_shutdown` | Shut down device |
+| `button.<n>_sleep` | Sleep (Windows only) |
+| `button.<n>_hibernate` | Hibernate (Windows only) |
+| `button.<n>_wake_on_lan` | Wake-on-LAN via MeshCentral agents |
 
 **Wake-on-LAN** works even without direct network access — MeshCentral automatically finds online agents on the same network and uses them to broadcast the magic packet.
 
@@ -44,25 +65,46 @@ These sensors are fetched every 5 minutes via a separate `getsysinfo` call. They
 
 **All platforms:**
 
-EntityDescription`sensor.<n>_cpu`CPU model name`sensor.<n>_gpu`GPU model name`sensor.<n>_bios_version`BIOS version (vendor + date as attributes)`sensor.<n>_motherboard`Motherboard model (vendor as attribute)
+| Entity | Description |
+|---|---|
+| `sensor.<n>_cpu` | CPU model name |
+| `sensor.<n>_gpu` | GPU model name |
+| `sensor.<n>_bios_version` | BIOS version (vendor + date as attributes) |
+| `sensor.<n>_motherboard` | Motherboard model (vendor as attribute) |
 
 **Windows only:**
 
-EntityDescription`sensor.<n>_ram_total`Total RAM in GB`sensor.<n>_disk_c_total`C: drive total size in GB`sensor.<n>_disk_c_free`C: drive free space in GB`sensor.<n>_disk_c_free_percent`C: drive free space in %`sensor.<n>_running_processes`Number of running processes`sensor.<n>_screen_resolution`Current screen resolution (e.g. 1920x1080)
+| Entity | Description |
+|---|---|
+| `sensor.<n>_ram_total` | Total RAM in GB |
+| `sensor.<n>_battery` | Battery charge % (charging/discharging, health %, cycle count etc. as attributes) |
+| `sensor.<n>_disk_c_total` | C: drive total size in GB |
+| `sensor.<n>_disk_c_free` | C: drive free space in GB |
+| `sensor.<n>_disk_c_free_percent` | C: drive free space in % |
+| `sensor.<n>_running_processes` | Number of running processes |
+| `sensor.<n>_screen_resolution` | Current screen resolution (e.g. 1920x1080) |
 
-Additional volumes beyond C: (D:, E:, ...) get their own set of Total/Free/Free % sensors automatically, named after the drive letter.
+Additional volumes beyond C: (D:, E:, ...) get their own set of Total/Free/Free % sensors automatically, named after the drive letter. The battery sensor is only meaningful on devices that report one (laptops) — it stays unavailable on desktops.
 
 **Linux only:**
 
-EntityDescription`sensor.<n>_disk_used`Root filesystem used in MB`sensor.<n>_disk_free`Root filesystem free in MB
+| Entity | Description |
+|---|---|
+| `sensor.<n>_disk_used` | Root filesystem used in MB |
+| `sensor.<n>_disk_free` | Root filesystem free in MB |
 
 Additional mount points beyond / (e.g. /home, /mnt/data) get their own Used/Free sensors automatically, named after the mount point.
 
-### Service
+### Services
 
-ServiceDescription`meshcentral.run_command`Run a shell command on any online device
+| Service | Description |
+|---|---|
+| `meshcentral.run_command` | Run a shell/OS command on any online device |
+| `meshcentral.run_console_command` | Send a MeshCentral built-in agent console command (e.g. `apf cira`, `info`, `help`) — not an OS shell command |
 
 `run_command` always fires a `meshcentral_command_result` event with `device_id`, `device_name`, `command`, `success`, and `output`, and returns the same data as a service response (use `response_variable` in scripts/automations to capture it). Set `notify: true` to also create a persistent notification with the output.
+
+`run_console_command` targets one or more devices at once (`device_id` accepts a list), sending one request per MeshCentral server involved. It requires the account to hold MeshCentral's **`agentconsole`** right on the device/mesh — without it, MeshCentral accepts the request but never replies, so the call times out with no error. It fires a `meshcentral_console_command_result` event and returns a `results` dict keyed by device, e.g. `results: {fedora: {success: true, output: "..."}}`. Send `command: "help"` first to see the list of available commands for a given device.
 
 ## Installation
 
@@ -194,6 +236,13 @@ data:
 - service: notify.mobile_app
   data:
     message: "{{ cmd_result.output }}"
+
+# Revive a dropped CIRA connection via a MeshCentral console command
+- service: meshcentral.run_console_command
+  data:
+    device_id: ASUS-GamerPC
+    command: "apf cira"
+    notify: true
 ```
 
 ## Related
