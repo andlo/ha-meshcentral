@@ -79,9 +79,10 @@ async def async_setup_server_version_entities(
     main: MeshCentralCoordinator,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    coordinator = ServerVersionCoordinator(hass, main)
-    await coordinator.async_config_entry_first_refresh()
-    hass.data[DOMAIN][f"{entry.entry_id}_serverversion"] = coordinator
+    # Coordinator is created and first-refreshed in __init__.py, before
+    # platforms are forwarded (see comment there re: #43 platform-setup
+    # race) — just look it up here rather than creating a second one.
+    coordinator: ServerVersionCoordinator = hass.data[DOMAIN][f"{entry.entry_id}_serverversion"]
 
     async_add_entities([
         MeshCentralInstalledVersionSensor(coordinator, main, entry.entry_id),

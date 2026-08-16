@@ -10,6 +10,7 @@ from homeassistant.exceptions import ConfigEntryNotReady
 
 from .const import DOMAIN
 from .coordinator import MeshCentralCoordinator
+from .sensor_serverversion import ServerVersionCoordinator
 from .services import async_register_services
 
 _LOGGER = logging.getLogger(__name__)
@@ -19,6 +20,7 @@ PLATFORMS = [
     Platform.SENSOR,
     Platform.BUTTON,
     Platform.DEVICE_TRACKER,
+    Platform.UPDATE,
 ]
 
 
@@ -32,6 +34,15 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         raise ConfigEntryNotReady(f"Cannot connect to MeshCentral: {err}") from err
 
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = coordinator
+
+    # Created here — not inside sensor.py's own setup — and stored before
+    # forwarding platforms, because async_forward_entry_setups() sets up
+    # SENSOR and UPDATE concurrently (#43). UPDATE reads this coordinator
+    # from hass.data too, so it can't rely on SENSOR having created it
+    # first; both platforms would otherwise race on which one wins.
+    version_coordinator = ServerVersionCoordinator(hass, coordinator)
+    await version_coordinator.async_config_entry_first_refresh()
+    hass.data[DOMAIN][f"{entry.entry_id}_serverversion"] = version_coordinator
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
