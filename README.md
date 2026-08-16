@@ -95,6 +95,27 @@ Additional volumes beyond C: (D:, E:, ...) get their own set of Total/Free/Free 
 
 Additional mount points beyond / (e.g. /home, /mnt/data) get their own Used/Free sensors automatically, named after the mount point.
 
+### Server-level entities
+
+These describe the MeshCentral server itself rather than an individual managed device, and live on a synthetic "MeshCentral Server" device.
+
+| Entity | Description |
+|---|---|
+| `sensor.meshcentral_server_devices_online` | Devices currently online, across all groups |
+| `sensor.meshcentral_server_devices_offline` | Devices currently offline, across all groups |
+| `sensor.meshcentral_server_devices_total` | Total managed devices |
+| `sensor.meshcentral_server_device_groups` | Number of device groups (meshes) |
+| `sensor.meshcentral_server_user_accounts` | Number of MeshCentral user accounts |
+| `sensor.meshcentral_server_installed_version` | Installed MeshCentral core version |
+| `sensor.meshcentral_server_latest_available_version` | Latest MeshCentral version published on npm |
+| `update.meshcentral_server_meshcentral_core` | Same installed/latest version, surfaced as a native HA update entity (Settings → Updates). Informational only — no install action, since the integration doesn't assume how your server is hosted |
+
+**Per device group** — one aggregated sensor per mesh/device group, on its own synthetic device nested under "MeshCentral Server":
+
+| Entity | Description |
+|---|---|
+| `sensor.<meshname>_devices_online` | Online device count for that group. Attributes: `total` (group size), `offline_devices` (names of offline devices in the group) |
+
 ### Services
 
 | Service | Description |
