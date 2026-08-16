@@ -8,7 +8,7 @@ from typing import Any
 from homeassistant.components.sensor import SensorEntity, SensorStateClass
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import EntityCategory
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity, DataUpdateCoordinator
 
@@ -36,7 +36,19 @@ class ServerStatsCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     async def _async_update_data(self) -> dict[str, Any]:
         meshes = await self._main.client.get_device_groups()
         users = await self._main.client.get_users()
-        return {"mesh_count": len(meshes), "account_count": len(users)}
+        return {
+            "mesh_count": len(meshes),
+            "account_count": len(users),
+            # Trimmed id/name pairs only — used to spawn one aggregated
+            # online-count sensor per device group (#41). The full mesh
+            # objects aren't needed here and would just bloat coordinator
+            # data that's diffed/compared on every 15-minute refresh.
+            "meshes": [
+                {"_id": m["_id"], "name": m.get("name", m["_id"])}
+                for m in meshes
+                if m.get("_id")
+            ],
+        }
 
 
 async def async_setup_server_stats_entities(
@@ -56,6 +68,27 @@ async def async_setup_server_stats_entities(
         MeshCentralMeshCountSensor(coordinator, main, entry.entry_id),
         MeshCentralAccountCountSensor(coordinator, main, entry.entry_id),
     ])
+
+    # One aggregated online-count sensor per device group (#41). Device
+    # groups are rarely added/removed, but handle it the same way sensor.py
+    # handles new devices — add entities for any group we haven't seen yet,
+    # every time the slow-polled stats coordinator refreshes.
+    known_group_ids: set[str] = set()
+
+    @callback
+    def _async_add_new_group_entities() -> None:
+        meshes = coordinator.data.get("meshes") or []
+        new_meshes = [m for m in meshes if m["_id"] not in known_group_ids]
+        if not new_meshes:
+            return
+        known_group_ids.update(m["_id"] for m in new_meshes)
+        async_add_entities([
+            MeshCentralGroupDevicesOnlineSensor(main, entry.entry_id, m["_id"], m["name"])
+            for m in new_meshes
+        ])
+
+    _async_add_new_group_entities()
+    entry.async_on_unload(coordinator.async_add_listener(_async_add_new_group_entities))
 
 
 class _ServerDeviceMixin:
@@ -162,3 +195,56 @@ class MeshCentralAccountCountSensor(_StatsCoordinatorBase):
     @property
     def native_value(self):
         return self.coordinator.data.get("account_count")
+
+
+class MeshCentralGroupDevicesOnlineSensor(CoordinatorEntity[MeshCentralCoordinator], SensorEntity):
+    """Online/total device count for a single device group (mesh) (#41).
+
+    Reuses the main coordinator directly (not the slow-polled stats one) so
+    the count updates instantly via the same nodeconnect WebSocket push the
+    per-device online binary_sensor already relies on.
+
+    Gets its own synthetic per-group device (nested under the MeshCentral
+    Server device via via_device) rather than living on the server device
+    itself, so each group reads cleanly as e.g. "Office" -> "Devices Online"
+    instead of a long, prefixed entity name.
+    """
+
+    _attr_has_entity_name = True
+    _attr_name = "Devices Online"
+    _attr_icon = "mdi:lan-connect"
+    _attr_state_class = SensorStateClass.MEASUREMENT
+
+    def __init__(self, main: MeshCentralCoordinator, entry_id: str, mesh_id: str, mesh_name: str) -> None:
+        super().__init__(main)
+        self._main = main
+        self._entry_id = entry_id
+        self._mesh_id = mesh_id
+        self._mesh_name = mesh_name
+        self._attr_unique_id = f"mc_{entry_id}_group_{mesh_id}_devices_online"
+
+    @property
+    def _group_nodes(self) -> list[dict]:
+        return [n for n in self._main.data.values() if n.get("_meshid") == self._mesh_id]
+
+    @property
+    def native_value(self):
+        # Matches the server-wide Devices Online sensor: conn is a bitmask,
+        # so any nonzero value counts as online (see binary_sensor.py).
+        return sum(1 for n in self._group_nodes if n.get("conn", 0) != 0)
+
+    @property
+    def extra_state_attributes(self):
+        nodes = self._group_nodes
+        offline = sorted(n.get("name", n.get("_id")) for n in nodes if n.get("conn", 0) == 0)
+        return {"total": len(nodes), "offline_devices": offline}
+
+    @property
+    def device_info(self):
+        return {
+            "identifiers": {(DOMAIN, f"{self._entry_id}_group_{self._mesh_id}")},
+            "name": self._mesh_name,
+            "manufacturer": "MeshCentral",
+            "model": "Device Group",
+            "via_device": (DOMAIN, f"{self._entry_id}_server"),
+        }
