@@ -7,6 +7,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryNotReady
+from homeassistant.helpers import device_registry as dr
 
 from .const import DOMAIN
 from .coordinator import MeshCentralCoordinator
@@ -32,6 +33,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         await coordinator.async_config_entry_first_refresh()
     except Exception as err:
         raise ConfigEntryNotReady(f"Cannot connect to MeshCentral: {err}") from err
+
+    _async_cleanup_deselected_devices(hass, entry, coordinator)
 
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = coordinator
 
@@ -59,6 +62,46 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 async def async_update_listener(hass: HomeAssistant, entry: ConfigEntry) -> None:
     """Reload the config entry when its options are updated."""
     await hass.config_entries.async_reload(entry.entry_id)
+
+
+def _async_cleanup_deselected_devices(
+    hass: HomeAssistant, entry: ConfigEntry, coordinator: MeshCentralCoordinator
+) -> None:
+    """Remove devices that fell outside the group filter (#47).
+
+    coordinator.all_devices is the unfiltered list from the fetch that just
+    ran; coordinator.data is the same fetch after the selected-groups
+    filter. Any node still present in the former but not the latter is a
+    device that genuinely still exists on the MeshCentral server but was
+    just excluded by the current group selection — remove its HA device
+    (which cascades to its entities) so it doesn't linger as an orphaned
+    "unavailable" entry. Devices that no longer exist on the server at all
+    (removed in MeshCentral itself) are left untouched here, unchanged
+    from the integration's behavior before this filter existed.
+    """
+    all_node_ids = {d["_id"] for d in coordinator.all_devices if "_id" in d}
+    selected_node_ids = set(coordinator.data or {})
+    stale_node_ids = all_node_ids - selected_node_ids
+    if not stale_node_ids:
+        return
+
+    device_registry = dr.async_get(hass)
+    for device in dr.async_entries_for_config_entry(device_registry, entry.entry_id):
+        node_id = next(
+            (
+                identifier[1]
+                for identifier in device.identifiers
+                if identifier[0] == DOMAIN and identifier[1] in stale_node_ids
+            ),
+            None,
+        )
+        if node_id is not None:
+            _LOGGER.info(
+                "Removing device %s (%s) — excluded by the device group filter",
+                device.name,
+                node_id,
+            )
+            device_registry.async_remove_device(device.id)
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:

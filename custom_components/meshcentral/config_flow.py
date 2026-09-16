@@ -9,12 +9,19 @@ import voluptuous as vol
 from homeassistant.config_entries import ConfigFlow, ConfigFlowResult, OptionsFlow
 from homeassistant.const import CONF_HOST, CONF_PASSWORD, CONF_PORT, CONF_USERNAME
 from homeassistant.core import callback
+from homeassistant.helpers.selector import (
+    SelectOptionDict,
+    SelectSelector,
+    SelectSelectorConfig,
+    SelectSelectorMode,
+)
 
 from .client import MeshCentralClient
 from .const import (
     CONF_HW_SCAN_INTERVAL,
     CONF_LOGIN_KEY,
     CONF_MAIN_SCAN_INTERVAL,
+    CONF_SELECTED_MESH_IDS,
     CONF_USE_SSL,
     CONF_VERIFY_SSL,
     DEFAULT_HW_SCAN_INTERVAL,
@@ -92,7 +99,7 @@ class MeshCentralConfigFlow(ConfigFlow, domain=DOMAIN):
 
 
 class MeshCentralOptionsFlow(OptionsFlow):
-    """Options flow: let the user tune the poll intervals.
+    """Options flow: poll intervals and device group filtering (#47).
 
     self.config_entry is provided automatically by the base OptionsFlow
     class (HA 2024.12+) — no need to store it ourselves.
@@ -104,8 +111,23 @@ class MeshCentralOptionsFlow(OptionsFlow):
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
+        """Landing menu: general poll settings, or device group filtering."""
+        return self.async_show_menu(
+            step_id="init",
+            menu_options=["general", "groups"],
+        )
+
+    async def async_step_general(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
         if user_input is not None:
-            return self.async_create_entry(data=user_input)
+            # Merge into existing options rather than replacing them — this
+            # step only ever edits the two scan-interval keys, so a bare
+            # async_create_entry(data=user_input) here would silently wipe
+            # any CONF_SELECTED_MESH_IDS set via the "groups" step.
+            return self.async_create_entry(
+                data={**self.config_entry.options, **user_input}
+            )
 
         current = self.config_entry.options
         schema = vol.Schema(
@@ -120,4 +142,79 @@ class MeshCentralOptionsFlow(OptionsFlow):
                 ): vol.All(int, vol.Range(min=1, max=60)),
             }
         )
-        return self.async_show_form(step_id="init", data_schema=schema)
+        return self.async_show_form(step_id="general", data_schema=schema)
+
+    async def async_step_groups(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Select which MeshCentral device groups to import (#47).
+
+        Selection is stored by mesh ID, not name, so renaming a group on
+        the MeshCentral side doesn't silently drop it from the filter. An
+        empty selection means "all groups" — the pre-#47 default, so
+        existing installs keep their current behavior after upgrading.
+        """
+        if user_input is not None:
+            return self.async_create_entry(
+                data={
+                    **self.config_entry.options,
+                    CONF_SELECTED_MESH_IDS: user_input.get(
+                        CONF_SELECTED_MESH_IDS, []
+                    ),
+                }
+            )
+
+        entry_data = self.config_entry.data
+        client = MeshCentralClient(
+            host=entry_data[CONF_HOST],
+            port=entry_data[CONF_PORT],
+            username=entry_data[CONF_USERNAME],
+            password=entry_data[CONF_PASSWORD],
+            use_ssl=entry_data.get(CONF_USE_SSL, False),
+            verify_ssl=entry_data.get(CONF_VERIFY_SSL, False),
+            login_key=entry_data.get(CONF_LOGIN_KEY) or None,
+        )
+        errors: dict[str, str] = {}
+        groups: list[dict] = []
+        try:
+            if await client.login():
+                groups = await client.get_device_groups()
+                if not groups:
+                    errors["base"] = "no_groups"
+            else:
+                errors["base"] = "cannot_connect"
+        except Exception:
+            _LOGGER.exception("Failed to fetch device groups for options flow")
+            errors["base"] = "cannot_connect"
+        finally:
+            await client.close()
+
+        if errors:
+            return self.async_show_form(step_id="groups", errors=errors)
+
+        group_options = [
+            SelectOptionDict(value=group["_id"], label=group.get("name") or group["_id"])
+            for group in groups
+            if "_id" in group
+        ]
+        current_selection = [
+            mesh_id
+            for mesh_id in self.config_entry.options.get(CONF_SELECTED_MESH_IDS, [])
+            if mesh_id in {g["value"] for g in group_options}
+        ]
+
+        schema = vol.Schema(
+            {
+                vol.Optional(
+                    CONF_SELECTED_MESH_IDS,
+                    default=current_selection,
+                ): SelectSelector(
+                    SelectSelectorConfig(
+                        options=group_options,
+                        multiple=True,
+                        mode=SelectSelectorMode.LIST,
+                    )
+                ),
+            }
+        )
+        return self.async_show_form(step_id="groups", data_schema=schema)
