@@ -16,6 +16,11 @@ CONF_HW_SCAN_INTERVAL = "hw_scan_interval"
 DEFAULT_MAIN_SCAN_INTERVAL = 5  # minutes — fallback poll behind the WS push
 DEFAULT_HW_SCAN_INTERVAL = 5  # minutes — getsysinfo poll for hardware sensors
 
+# Options flow key for device group filtering (#47). A list of MeshCentral
+# mesh IDs (not names, so renaming a group doesn't break the selection). An
+# empty list (the default) means "all groups" — the pre-#47 behavior.
+CONF_SELECTED_MESH_IDS = "selected_mesh_ids"
+
 # Device attributes
 ATTR_NODE_ID = "node_id"
 ATTR_MESH_ID = "mesh_id"

@@ -17,6 +17,7 @@ from .const import (
     CONF_HW_SCAN_INTERVAL,
     CONF_LOGIN_KEY,
     CONF_MAIN_SCAN_INTERVAL,
+    CONF_SELECTED_MESH_IDS,
     CONF_USE_SSL,
     CONF_VERIFY_SSL,
     DEFAULT_MAIN_SCAN_INTERVAL,
@@ -56,6 +57,25 @@ class MeshCentralCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         )
         self._logged_in = False
         self._event_task: asyncio.Task | None = None
+        # Unfiltered device list from the most recent fetch — kept
+        # separately from self.data (which entity platforms consume, and
+        # which is filtered by selected_mesh_ids below) so __init__.py can
+        # diff the two after a reload and clean up devices that still exist
+        # on the MeshCentral server but fell outside the current group
+        # selection (#47), rather than leaving them as orphaned entities.
+        self.all_devices: list[dict] = []
+
+    def _filter_by_selected_groups(self, devices: list[dict]) -> list[dict]:
+        """Filter devices by the configured mesh group selection (#47).
+
+        An empty/missing selection means "all groups" — the pre-#47
+        default, preserved for existing installs on upgrade.
+        """
+        selected_mesh_ids = self.entry.options.get(CONF_SELECTED_MESH_IDS) or []
+        if not selected_mesh_ids:
+            return devices
+        selected = set(selected_mesh_ids)
+        return [d for d in devices if d.get("_meshid") in selected]
 
     async def _async_update_data(self) -> dict[str, Any]:
         """Full poll — used on startup and as 5-minute fallback."""
@@ -92,7 +112,12 @@ class MeshCentralCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             self._logged_in = False
             raise UpdateFailed(f"Error fetching devices: {err}") from err
 
-        data = {d["_id"]: d for d in devices if "_id" in d}
+        self.all_devices = devices
+        data = {
+            d["_id"]: d
+            for d in self._filter_by_selected_groups(devices)
+            if "_id" in d
+        }
 
         # client.get_devices() now raises on a failed/timed-out request
         # (see #30) rather than returning [], so the except above already
@@ -185,7 +210,12 @@ class MeshCentralCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             self._logged_in = False
             return
 
-        data = {d["_id"]: d for d in devices if "_id" in d}
+        self.all_devices = devices
+        data = {
+            d["_id"]: d
+            for d in self._filter_by_selected_groups(devices)
+            if "_id" in d
+        }
 
         # Same stale-session guard as _async_update_data (#29): an empty
         # result here after previously having devices means the reconnect
