@@ -18,6 +18,7 @@ from homeassistant.helpers.selector import (
 
 from .client import MeshCentralClient
 from .const import (
+    CONF_ENTITY_CATEGORIES,
     CONF_HW_SCAN_INTERVAL,
     CONF_LOGIN_KEY,
     CONF_MAIN_SCAN_INTERVAL,
@@ -28,9 +29,22 @@ from .const import (
     DEFAULT_MAIN_SCAN_INTERVAL,
     DEFAULT_PORT,
     DOMAIN,
+    ENTITY_CATEGORIES,
 )
 
 _LOGGER = logging.getLogger(__name__)
+
+# Display labels for the static entity-category multi-select (#47, part 2).
+# Unlike device groups, these aren't fetched live — they're a fixed set the
+# integration itself defines, so the labels live here rather than coming
+# from any server response.
+ENTITY_CATEGORY_LABELS: dict[str, str] = {
+    "status": "Status (online, device tracker)",
+    "system_info": "System info (OS, IP, boot time, users, description)",
+    "security": "Security (antivirus, firewall, Defender)",
+    "hardware": "Hardware details (CPU, GPU, RAM, disks, battery)",
+    "power_control": "Power control (reboot, shutdown, sleep, WOL)",
+}
 
 STEP_USER_SCHEMA = vol.Schema(
     {
@@ -111,10 +125,10 @@ class MeshCentralOptionsFlow(OptionsFlow):
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        """Landing menu: general poll settings, or device group filtering."""
+        """Landing menu: general settings, device groups, or entity categories."""
         return self.async_show_menu(
             step_id="init",
-            menu_options=["general", "groups"],
+            menu_options=["general", "groups", "categories"],
         )
 
     async def async_step_general(
@@ -218,3 +232,45 @@ class MeshCentralOptionsFlow(OptionsFlow):
             }
         )
         return self.async_show_form(step_id="groups", data_schema=schema)
+
+    async def async_step_categories(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Select which entity categories to create per device (#47, part 2).
+
+        An empty selection means "all categories" — the pre-#47 default, so
+        existing installs keep their current behavior after upgrading.
+        Deselecting a category removes its entities (not the whole device)
+        from the registry on reload.
+        """
+        if user_input is not None:
+            return self.async_create_entry(
+                data={
+                    **self.config_entry.options,
+                    CONF_ENTITY_CATEGORIES: user_input.get(
+                        CONF_ENTITY_CATEGORIES, []
+                    ),
+                }
+            )
+
+        category_options = [
+            SelectOptionDict(value=category, label=ENTITY_CATEGORY_LABELS[category])
+            for category in ENTITY_CATEGORIES
+        ]
+        current_selection = self.config_entry.options.get(CONF_ENTITY_CATEGORIES, [])
+
+        schema = vol.Schema(
+            {
+                vol.Optional(
+                    CONF_ENTITY_CATEGORIES,
+                    default=current_selection,
+                ): SelectSelector(
+                    SelectSelectorConfig(
+                        options=category_options,
+                        multiple=True,
+                        mode=SelectSelectorMode.LIST,
+                    )
+                ),
+            }
+        )
+        return self.async_show_form(step_id="categories", data_schema=schema)

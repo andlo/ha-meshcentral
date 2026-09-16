@@ -10,7 +10,14 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import CONN_AGENT, DOMAIN, conn_type_list
+from .const import (
+    CONN_AGENT,
+    DOMAIN,
+    ENTITY_CATEGORY_SECURITY,
+    ENTITY_CATEGORY_STATUS,
+    conn_type_list,
+    is_category_enabled,
+)
 from .coordinator import MeshCentralCoordinator
 
 
@@ -21,6 +28,8 @@ async def async_setup_entry(
 ) -> None:
     coordinator: MeshCentralCoordinator = hass.data[DOMAIN][entry.entry_id]
     known_node_ids: set[str] = set()
+    status_enabled = is_category_enabled(entry.options, ENTITY_CATEGORY_STATUS)
+    security_enabled = is_category_enabled(entry.options, ENTITY_CATEGORY_SECURITY)
 
     @callback
     def _async_add_new_device_entities() -> None:
@@ -34,12 +43,14 @@ async def async_setup_entry(
         known_node_ids.update(new_node_ids)
         entities = []
         for node_id in new_node_ids:
-            entities += [
-                MeshCentralOnlineSensor(coordinator, node_id),
-                MeshCentralAntivirusSensor(coordinator, node_id),
-                MeshCentralFirewallSensor(coordinator, node_id),
-                MeshCentralDefenderSensor(coordinator, node_id),
-            ]
+            if status_enabled:
+                entities.append(MeshCentralOnlineSensor(coordinator, node_id))
+            if security_enabled:
+                entities += [
+                    MeshCentralAntivirusSensor(coordinator, node_id),
+                    MeshCentralFirewallSensor(coordinator, node_id),
+                    MeshCentralDefenderSensor(coordinator, node_id),
+                ]
         async_add_entities(entities)
 
     _async_add_new_device_entities()
