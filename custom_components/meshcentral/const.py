@@ -21,6 +21,80 @@ DEFAULT_HW_SCAN_INTERVAL = 5  # minutes — getsysinfo poll for hardware sensors
 # empty list (the default) means "all groups" — the pre-#47 behavior.
 CONF_SELECTED_MESH_IDS = "selected_mesh_ids"
 
+# Options flow key for per-device entity category filtering (#47, part 2).
+# A list of category keys (below). An empty list (the default) means "all
+# categories" - the pre-#47 behavior, so existing installs are unaffected.
+CONF_ENTITY_CATEGORIES = "entity_categories"
+
+ENTITY_CATEGORY_STATUS = "status"
+ENTITY_CATEGORY_SYSTEM_INFO = "system_info"
+ENTITY_CATEGORY_SECURITY = "security"
+ENTITY_CATEGORY_HARDWARE = "hardware"
+ENTITY_CATEGORY_POWER_CONTROL = "power_control"
+
+# Order here is the order shown in the options-flow multi-select.
+ENTITY_CATEGORIES: list[str] = [
+    ENTITY_CATEGORY_STATUS,
+    ENTITY_CATEGORY_SYSTEM_INFO,
+    ENTITY_CATEGORY_SECURITY,
+    ENTITY_CATEGORY_HARDWARE,
+    ENTITY_CATEGORY_POWER_CONTROL,
+]
+
+# unique_id suffix -> category, used only to classify already-registered
+# entities during options-flow cleanup (#47) - entity creation itself gates
+# on the category directly in each platform; this map exists purely so
+# cleanup can recognize an existing registry entry without a live entity
+# object. Hardware sensors aren't listed here since their suffixes vary
+# (per-drive-letter, per-mount-point); they're matched by "_hw_" below
+# instead. A unique_id that matches nothing here (server/group-level
+# sensors, or anything future) is never touched by the category filter.
+_ENTITY_CATEGORY_SUFFIXES: dict[str, str] = {
+    "_online": ENTITY_CATEGORY_STATUS,
+    "_tracker": ENTITY_CATEGORY_STATUS,
+    "_av": ENTITY_CATEGORY_SECURITY,
+    "_fw": ENTITY_CATEGORY_SECURITY,
+    "_defender": ENTITY_CATEGORY_SECURITY,
+    "_os": ENTITY_CATEGORY_SYSTEM_INFO,
+    "_ip": ENTITY_CATEGORY_SYSTEM_INFO,
+    "_lastboot": ENTITY_CATEGORY_SYSTEM_INFO,
+    "_idletime": ENTITY_CATEGORY_SYSTEM_INFO,
+    "_users": ENTITY_CATEGORY_SYSTEM_INFO,
+    "_desc": ENTITY_CATEGORY_SYSTEM_INFO,
+    "_agct": ENTITY_CATEGORY_SYSTEM_INFO,
+    "_pwr": ENTITY_CATEGORY_SYSTEM_INFO,
+    "_reboot": ENTITY_CATEGORY_POWER_CONTROL,
+    "_shutdown": ENTITY_CATEGORY_POWER_CONTROL,
+    "_sleep": ENTITY_CATEGORY_POWER_CONTROL,
+    "_hibernate": ENTITY_CATEGORY_POWER_CONTROL,
+    "_wol": ENTITY_CATEGORY_POWER_CONTROL,
+}
+
+
+def categorize_entity_unique_id(unique_id: str) -> str | None:
+    """Classify a registered entity's unique_id into an entity category.
+
+    Returns None for anything not covered by the filter (server-level and
+    group-level sensors, or an unrecognized suffix) - cleanup leaves those
+    alone regardless of the current category selection.
+    """
+    if "_hw_" in unique_id:
+        return ENTITY_CATEGORY_HARDWARE
+    for suffix, category in _ENTITY_CATEGORY_SUFFIXES.items():
+        if unique_id.endswith(suffix):
+            return category
+    return None
+
+
+def is_category_enabled(options: dict, category: str) -> bool:
+    """True if `category` should have entities created, given options.
+
+    An empty/missing selection means "all categories" - the pre-#47
+    default, preserved for existing installs on upgrade.
+    """
+    active = options.get(CONF_ENTITY_CATEGORIES) or []
+    return not active or category in active
+
 # Device attributes
 ATTR_NODE_ID = "node_id"
 ATTR_MESH_ID = "mesh_id"

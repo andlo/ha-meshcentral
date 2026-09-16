@@ -9,7 +9,7 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import CONN_AGENT, DOMAIN
+from .const import CONN_AGENT, DOMAIN, ENTITY_CATEGORY_STATUS, is_category_enabled
 from .coordinator import MeshCentralCoordinator
 
 _LOGGER = logging.getLogger(__name__)
@@ -22,6 +22,9 @@ async def async_setup_entry(
 ) -> None:
     coordinator: MeshCentralCoordinator = hass.data[DOMAIN][entry.entry_id]
     known_node_ids: set[str] = set()
+
+    if not is_category_enabled(entry.options, ENTITY_CATEGORY_STATUS):
+        return
 
     @callback
     def _async_add_new_device_entities() -> None:
