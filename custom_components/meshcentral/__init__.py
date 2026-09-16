@@ -8,8 +8,9 @@ from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.helpers import device_registry as dr
+from homeassistant.helpers import entity_registry as er
 
-from .const import DOMAIN
+from .const import CONF_ENTITY_CATEGORIES, DOMAIN, categorize_entity_unique_id
 from .coordinator import MeshCentralCoordinator
 from .sensor_serverversion import ServerVersionCoordinator
 from .services import async_register_services
@@ -35,6 +36,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         raise ConfigEntryNotReady(f"Cannot connect to MeshCentral: {err}") from err
 
     _async_cleanup_deselected_devices(hass, entry, coordinator)
+    _async_cleanup_deselected_categories(hass, entry)
 
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = coordinator
 
@@ -102,6 +104,30 @@ def _async_cleanup_deselected_devices(
                 node_id,
             )
             device_registry.async_remove_device(device.id)
+
+
+def _async_cleanup_deselected_categories(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """Remove entities that fell outside the entity category filter (#47).
+
+    Unlike the group filter, this never touches a whole device — only the
+    specific entities belonging to a deselected category. It works purely
+    off the entity registry (categorize_entity_unique_id), not live data,
+    since the category list is static rather than fetched from the server.
+    An empty selection means "all categories", so there's nothing to do.
+    """
+    active = entry.options.get(CONF_ENTITY_CATEGORIES) or []
+    if not active:
+        return
+
+    entity_registry = er.async_get(hass)
+    for entity in er.async_entries_for_config_entry(entity_registry, entry.entry_id):
+        category = categorize_entity_unique_id(entity.unique_id)
+        if category is not None and category not in active:
+            _LOGGER.info(
+                "Removing entity %s — excluded by the entity category filter",
+                entity.entity_id,
+            )
+            entity_registry.async_remove(entity.entity_id)
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:

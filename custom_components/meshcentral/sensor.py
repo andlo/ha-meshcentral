@@ -9,7 +9,14 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import DOMAIN, POWER_STATE_MAP, POWER_STATE_UNKNOWN
+from .const import (
+    DOMAIN,
+    ENTITY_CATEGORY_HARDWARE,
+    ENTITY_CATEGORY_SYSTEM_INFO,
+    POWER_STATE_MAP,
+    POWER_STATE_UNKNOWN,
+    is_category_enabled,
+)
 from .coordinator import MeshCentralCoordinator
 from .sensor_hardware import HardwareDataCoordinator, async_setup_hardware_entities
 from .sensor_serverstats import async_setup_server_stats_entities
@@ -23,6 +30,8 @@ async def async_setup_entry(
 ) -> None:
     coordinator: MeshCentralCoordinator = hass.data[DOMAIN][entry.entry_id]
     known_node_ids: set[str] = set()
+    system_info_enabled = is_category_enabled(entry.options, ENTITY_CATEGORY_SYSTEM_INFO)
+    hardware_enabled = is_category_enabled(entry.options, ENTITY_CATEGORY_HARDWARE)
 
     @callback
     def _async_add_new_device_entities() -> None:
@@ -34,6 +43,8 @@ async def async_setup_entry(
             return
 
         known_node_ids.update(new_node_ids)
+        if not system_info_enabled:
+            return
         entities = []
         for node_id in new_node_ids:
             entities += [
@@ -53,11 +64,16 @@ async def async_setup_entry(
         coordinator.async_add_listener(_async_add_new_device_entities)
     )
 
-    # Hardware detail sensors (disabled by default, fetched separately)
-    hw_coordinator = HardwareDataCoordinator(hass, coordinator)
-    await hw_coordinator.async_config_entry_first_refresh()
-    hass.data[DOMAIN][f"{entry.entry_id}_hw"] = hw_coordinator
-    await async_setup_hardware_entities(hass, entry, coordinator, hw_coordinator, async_add_entities)
+    # Hardware detail sensors (disabled by default, fetched separately).
+    # Skipped entirely when the "hardware" category is filtered out — this
+    # also stops the getsysinfo background poll, not just the entities, so
+    # deselecting it actually reduces the websocket/API traffic the way #47
+    # asked for, not just the entity count.
+    if hardware_enabled:
+        hw_coordinator = HardwareDataCoordinator(hass, coordinator)
+        await hw_coordinator.async_config_entry_first_refresh()
+        hass.data[DOMAIN][f"{entry.entry_id}_hw"] = hw_coordinator
+        await async_setup_hardware_entities(hass, entry, coordinator, hw_coordinator, async_add_entities)
 
     # Server-level version sensors (installed / latest available)
     await async_setup_server_version_entities(hass, entry, coordinator, async_add_entities)
