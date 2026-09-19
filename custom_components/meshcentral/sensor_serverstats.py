@@ -253,8 +253,8 @@ class MeshCentralGroupDevicesOnlineSensor(CoordinatorEntity[MeshCentralCoordinat
         # server device (added just before this one) should already be
         # registered. Fall back to no parent link if it isn't found yet.
         registry = dr.async_get(self._main.hass)
-        server_device = registry.async_get_device(
-            identifiers={(DOMAIN, f"{self._entry_id}_server")}
+        server_device = registry.async_get_device_by_identifier(
+            (DOMAIN, f"{self._entry_id}_server"), self._entry_id
         )
         if server_device is not None:
             info["via_device_id"] = server_device.id
