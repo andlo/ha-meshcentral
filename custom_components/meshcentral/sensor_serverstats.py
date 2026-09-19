@@ -9,6 +9,7 @@ from homeassistant.components.sensor import SensorEntity, SensorStateClass
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity, DataUpdateCoordinator
 
@@ -205,7 +206,7 @@ class MeshCentralGroupDevicesOnlineSensor(CoordinatorEntity[MeshCentralCoordinat
     per-device online binary_sensor already relies on.
 
     Gets its own synthetic per-group device (nested under the MeshCentral
-    Server device via via_device) rather than living on the server device
+    Server device via via_device_id) rather than living on the server device
     itself, so each group reads cleanly as e.g. "Office" -> "Devices Online"
     instead of a long, prefixed entity name.
     """
@@ -241,10 +242,20 @@ class MeshCentralGroupDevicesOnlineSensor(CoordinatorEntity[MeshCentralCoordinat
 
     @property
     def device_info(self):
-        return {
+        info = {
             "identifiers": {(DOMAIN, f"{self._entry_id}_group_{self._mesh_id}")},
             "name": self._mesh_name,
             "manufacturer": "MeshCentral",
             "model": "Device Group",
-            "via_device": (DOMAIN, f"{self._entry_id}_server"),
         }
+        # via_device (identifier tuple) is deprecated in favor of via_device_id
+        # (the parent device's registry ID); resolve it ourselves since the
+        # server device (added just before this one) should already be
+        # registered. Fall back to no parent link if it isn't found yet.
+        registry = dr.async_get(self._main.hass)
+        server_device = registry.async_get_device_by_identifier(
+            (DOMAIN, f"{self._entry_id}_server"), self._entry_id
+        )
+        if server_device is not None:
+            info["via_device_id"] = server_device.id
+        return info
