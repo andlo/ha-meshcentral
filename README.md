@@ -32,7 +32,7 @@ Running MeshCentral alongside Home Assistant is a powerful combination for anyon
 | `sensor.<n>_os` | OS description |
 | `sensor.<n>_ip_address` | Last known IP address |
 | `sensor.<n>_last_boot` | Last boot time (timestamp) |
-| `sensor.<n>_idle_time` | User idle time in seconds |
+| `sensor.<n>_idle_time` | User idle time in seconds (Windows only; `-1` = no active user sessions). Reported by the agent every 5 minutes — see [Idle time refresh](#idle-time-refresh) |
 | `sensor.<n>_active_users` | Currently logged-in users |
 | `sensor.<n>_description` | Device description from MeshCentral |
 | `sensor.<n>_agent_last_seen` | When agent last contacted server |
@@ -207,6 +207,26 @@ If MeshCentral runs behind a reverse proxy (Nginx, Cloudflare Tunnel) with `tlsO
 ### Poll intervals
 
 The device list updates instantly via WebSocket push — polling is just the fallback for missed events, plus the separate hardware (`getsysinfo`) poll. Both default to 5 minutes and can be changed under **Settings → Devices & Services → MeshCentral → Configure**, without needing to remove and re-add the integration.
+
+### Idle time refresh
+
+The `idle_time` value (like the rest of the agent's "core info" — logged-in users, last boot, security status) is measured and pushed by the MeshCentral agent itself on a fixed 5-minute timer. The integration picks it up in real time over the WebSocket, so lowering the poll interval or calling `homeassistant.update_entity` won't make it fresher — it just re-reads the value the server already has.
+
+To get a fresher value, ask the agent to push its core info immediately with the `coreinfoupdate` console command; the sensor updates within a few seconds:
+
+```yaml
+automation:
+  trigger:
+    platform: time_pattern
+    minutes: "/1"
+  action:
+    service: meshcentral.run_console_command
+    data:
+      device_id: ["ASUS-GamerPC"]
+      command: coreinfoupdate
+```
+
+This needs the `agentconsole` right (see [Services](#services)). Note that the sensor keeps its last value when the device goes offline, so combine it with `binary_sensor.<n>_online` if you use it for presence/activity detection.
 
 ## How it works
 
