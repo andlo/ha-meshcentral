@@ -14,11 +14,13 @@ from .coordinator import MeshCentralCoordinator
 
 _LOGGER = logging.getLogger(__name__)
 
-# MeshCentral poweraction types
-PWR_SLEEP = 1
-PWR_REBOOT = 2
-PWR_SHUTDOWN = 3
-PWR_WOL = 4
+# MeshCentral poweraction types — these are passed straight through to the
+# agent's ExecPowerState(), so they follow MeshAgent's AgentPowerStateActions
+# enum (meshcore/meshinfo.h). MeshCentral's own UI and meshctrl.js use the
+# same values: 2 = power off, 3 = reset, 4 = sleep. (#55)
+PWR_SHUTDOWN = 2
+PWR_REBOOT = 3
+PWR_SLEEP = 4
 PWR_HIBERNATE = 5
 
 
@@ -153,7 +155,7 @@ class MeshCentralWolButton(_BaseButton):
 
     _attr_name = "Wake on LAN"
     _attr_icon = "mdi:lan-pending"
-    _power_action = PWR_WOL  # kept for completeness, not used directly
+    # WOL uses the "wakedevices" action, not poweraction — see async_press.
 
     def __init__(self, coordinator, node_id):
         super().__init__(coordinator, node_id)
