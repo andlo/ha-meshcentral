@@ -431,16 +431,22 @@ class MeshCentralClient:
     async def send_power_action(self, node_id: str, action_type: int) -> bool:
         """Send a power command to a device.
 
-        action_type:
-            1 = Sleep
-            2 = Reboot
-            3 = Shutdown / Power off
-            5 = Hibernate (Windows only)
+        action_type (MeshAgent's AgentPowerStateActions, meshinfo.h):
+            2 = Shutdown / Power off
+            3 = Reboot / Reset
+            4 = Sleep
+            5 = Hibernate
+
+        MeshCentral's poweraction handler (meshuser.js) requires "nodeids"
+        as an array and rejects actiontype < 2. A request with a singular
+        "nodeid" is silently dropped with no reply. Note that the server's
+        "ok" reply only means the request was accepted, not that the agent
+        executed it (rights are checked asynchronously after the reply).
         """
         result = await self._send_recv(
             {
                 "action": "poweraction",
-                "nodeid": node_id,
+                "nodeids": [node_id],
                 "actiontype": action_type,
                 "responseid": f"ha-pwr-{time.monotonic_ns()}",
             },
